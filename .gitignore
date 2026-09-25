@@ -1,0 +1,16 @@
+# 原始素材：仅本地保留，不要入库（高清原图，体积大且等于公开原图）
+摄影社素材（网站）/
+
+# 工作区与记忆文件
+.workbuddy/
+
+# 构建过程产生的中间数据
+_tools/dims.txt
+_tools/contact_sheet.py
+_tools/dims.py
+_tools/check_logo.py
+_tools/logo_preview.py
+
+# 系统
+.DS_Store
+Thumbs.db

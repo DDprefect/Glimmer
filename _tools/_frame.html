@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<title>viewport frame</title>
+<style>
+  html,body{margin:0;padding:0;background:#888}
+  iframe{display:block;border:0;background:#fff}
+</style>
+</head><body>
+<iframe id="f" src="/index.html?shot=1"></iframe>
+<script>
+  var p = new URLSearchParams(location.search);
+  var w = parseInt(p.get('w') || '390', 10);
+  var h = parseInt(p.get('h') || '1400', 10);
+  var f = document.getElementById('f');
+  f.style.width = w + 'px';
+  f.style.height = h + 'px';
+  if (p.get('src')) f.src = '/' + p.get('src');
+</script>
+</body></html>
