@@ -11,6 +11,12 @@ _tools/dims.py
 _tools/check_logo.py
 _tools/logo_preview.py
 
+# 部署副本（发布时生成的干净拷贝，不入库）
+_deploy/
+
 # 系统
 .DS_Store
 Thumbs.db
+
+# WorkBuddy 运行时临时文件
+*.genie
