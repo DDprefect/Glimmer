@@ -1,0 +1,4 @@
+# 仅本地开发/构建使用，不参与线上部署
+# _tools/build_assets.py  -> 素材构建脚本（依赖本地原图目录）
+# _tools/_frame.html      -> 截图验收用的调试 iframe 页
+_tools/
