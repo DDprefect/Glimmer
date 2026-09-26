@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>灯箱验收</title>
+<style>
+  html,body{margin:0;height:100%;background:#111}
+  iframe{width:1200px;height:800px;border:0;display:block}
+</style>
+</head>
+<body>
+<iframe id="f" src="http://127.0.0.1:8848/gallery.html?shot=1#portrait"></iframe>
+<script>
+  var f = document.getElementById("f");
+  f.addEventListener("load", function () {
+    var d = f.contentDocument, w = f.contentWindow;
+    setTimeout(function () {
+      // 打开第一张人像
+      var cards = d.querySelectorAll(".work");
+      if (cards.length) cards[0].click();
+      setTimeout(function () {
+        // 切到下一张，验证不会二次抽动
+        w.Lightbox && d.dispatchEvent(new w.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      }, 400);
+    }, 900);
+  });
+</script>
+</body>
+</html>

@@ -9,7 +9,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4",
+   "shutter": "1/50s",
+   "iso": "ISO 450",
+   "focal": "51mm"
+  }
  },
  {
   "id": "hanlou-02",
@@ -21,7 +29,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4",
+   "shutter": "1/80s",
+   "iso": "ISO 2000",
+   "focal": "65mm"
+  }
  },
  {
   "id": "hanlou-03",
@@ -33,7 +49,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4.5",
+   "shutter": "1/25s",
+   "iso": "ISO 1100",
+   "focal": "24mm"
+  }
  },
  {
   "id": "hanlou-04",
@@ -45,7 +69,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4.5",
+   "shutter": "1/100s",
+   "iso": "ISO 450",
+   "focal": "95mm"
+  }
  },
  {
   "id": "hanlou-05",
@@ -57,7 +89,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4.5",
+   "shutter": "1/25s",
+   "iso": "ISO 1000",
+   "focal": "24mm"
+  }
  },
  {
   "id": "hanlou-06",
@@ -69,7 +109,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4",
+   "shutter": "1/60s",
+   "iso": "ISO 1250",
+   "focal": "42mm"
+  }
  },
  {
   "id": "hanlou-07",
@@ -81,7 +129,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4",
+   "shutter": "1/40s",
+   "iso": "ISO 400",
+   "focal": "24mm"
+  }
  },
  {
   "id": "hanlou-08",
@@ -93,7 +149,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4",
+   "shutter": "1/100s",
+   "iso": "ISO 720",
+   "focal": "57mm"
+  }
  },
  {
   "id": "sports-01",
@@ -105,7 +169,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/4.5",
+   "shutter": "1/1250s",
+   "iso": "ISO 500",
+   "focal": "35mm"
+  }
  },
  {
   "id": "sports-02",
@@ -117,7 +189,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/16",
+   "shutter": "1/200s",
+   "iso": "ISO 250",
+   "focal": "56mm"
+  }
  },
  {
   "id": "sports-03",
@@ -129,7 +209,14 @@
   "w": 1800,
   "h": 1202,
   "ratio": 1.498,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "lens": "28.0-300.0 mm f/3.5-5.6",
+   "aperture": "f/4.5",
+   "shutter": "1/2000s",
+   "iso": "ISO 320",
+   "focal": "58mm"
+  }
  },
  {
   "id": "sports-04",
@@ -141,7 +228,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/8",
+   "shutter": "1/250s",
+   "iso": "ISO 100",
+   "focal": "110mm"
+  }
  },
  {
   "id": "sports-05",
@@ -153,7 +248,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/14",
+   "shutter": "1/2000s",
+   "iso": "ISO 2000",
+   "focal": "46mm"
+  }
  },
  {
   "id": "sports-06",
@@ -165,7 +268,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/20",
+   "shutter": "1/1600s",
+   "iso": "ISO 2000",
+   "focal": "71mm"
+  }
  },
  {
   "id": "sports-07",
@@ -177,7 +288,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/5",
+   "shutter": "1/16000s",
+   "iso": "ISO 1000",
+   "focal": "120mm"
+  }
  },
  {
   "id": "sports-08",
@@ -189,7 +308,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "NIKON ZR",
+   "lens": "NIKKOR Z 24-120mm f/4 S\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+   "aperture": "f/5",
+   "shutter": "1/16000s",
+   "iso": "ISO 1100",
+   "focal": "69mm"
+  }
  },
  {
   "id": "sports-09",
@@ -201,7 +328,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "EF70-200mm f/4L USM",
+   "aperture": "f/4",
+   "shutter": "1/1000s",
+   "iso": "ISO 1000",
+   "focal": "70mm"
+  }
  },
  {
   "id": "view-01",
@@ -213,7 +348,8 @@
   "w": 1179,
   "h": 654,
   "ratio": 1.803,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-02",
@@ -225,7 +361,8 @@
   "w": 1179,
   "h": 782,
   "ratio": 1.508,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-03",
@@ -237,7 +374,14 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/9",
+   "shutter": "1/250s",
+   "iso": "ISO 400",
+   "focal": "35mm"
+  }
  },
  {
   "id": "view-04",
@@ -249,7 +393,8 @@
   "w": 1179,
   "h": 782,
   "ratio": 1.508,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-05",
@@ -261,7 +406,8 @@
   "w": 1179,
   "h": 778,
   "ratio": 1.515,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-06",
@@ -273,7 +419,8 @@
   "w": 1179,
   "h": 778,
   "ratio": 1.515,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-07",
@@ -285,7 +432,8 @@
   "w": 1179,
   "h": 1760,
   "ratio": 0.67,
-  "portrait": true
+  "portrait": true,
+  "shot": null
  },
  {
   "id": "view-08",
@@ -297,7 +445,8 @@
   "w": 1179,
   "h": 781,
   "ratio": 1.51,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-09",
@@ -309,7 +458,8 @@
   "w": 1179,
   "h": 779,
   "ratio": 1.513,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "view-10",
@@ -321,7 +471,14 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/8",
+   "shutter": "1/500s",
+   "iso": "ISO 800",
+   "focal": "105mm"
+  }
  },
  {
   "id": "view-11",
@@ -333,7 +490,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/9",
+   "shutter": "1/250s",
+   "iso": "ISO 125",
+   "focal": "46mm"
+  }
  },
  {
   "id": "view-12",
@@ -345,7 +510,14 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/9",
+   "shutter": "1/125s",
+   "iso": "ISO 200",
+   "focal": "88mm"
+  }
  },
  {
   "id": "sanjiang-01",
@@ -357,7 +529,10 @@
   "w": 1800,
   "h": 1350,
   "ratio": 1.333,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "iso": "ISO 50"
+  }
  },
  {
   "id": "sanjiang-02",
@@ -369,7 +544,10 @@
   "w": 1350,
   "h": 1800,
   "ratio": 0.75,
-  "portrait": true
+  "portrait": true,
+  "shot": {
+   "iso": "ISO 800"
+  }
  },
  {
   "id": "sanjiang-03",
@@ -381,7 +559,10 @@
   "w": 1800,
   "h": 1350,
   "ratio": 1.333,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "iso": "ISO 250"
+  }
  },
  {
   "id": "sanjiang-04",
@@ -393,7 +574,10 @@
   "w": 1800,
   "h": 1355,
   "ratio": 1.328,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "iso": "ISO 200"
+  }
  },
  {
   "id": "sanjiang-05",
@@ -405,7 +589,10 @@
   "w": 1355,
   "h": 1800,
   "ratio": 0.753,
-  "portrait": true
+  "portrait": true,
+  "shot": {
+   "iso": "ISO 2500"
+  }
  },
  {
   "id": "sanjiang-06",
@@ -417,7 +604,10 @@
   "w": 1350,
   "h": 1800,
   "ratio": 0.75,
-  "portrait": true
+  "portrait": true,
+  "shot": {
+   "iso": "ISO 50"
+  }
  },
  {
   "id": "sanjiang-07",
@@ -429,7 +619,15 @@
   "w": 1200,
   "h": 1800,
   "ratio": 0.667,
-  "portrait": true
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/400s",
+   "iso": "ISO 640",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-08",
@@ -441,7 +639,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/500s",
+   "iso": "ISO 800",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-09",
@@ -453,7 +659,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/500s",
+   "iso": "ISO 800",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-10",
@@ -465,7 +679,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/500s",
+   "iso": "ISO 800",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-11",
@@ -477,7 +699,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/160s",
+   "iso": "ISO 1600",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-12",
@@ -489,7 +719,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/250s",
+   "iso": "ISO 2000",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-13",
@@ -501,7 +739,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/250s",
+   "iso": "ISO 250",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-14",
@@ -513,7 +759,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/125s",
+   "iso": "ISO 400",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-15",
@@ -525,7 +779,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/125s",
+   "iso": "ISO 400",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-16",
@@ -537,7 +799,15 @@
   "w": 1200,
   "h": 1800,
   "ratio": 0.667,
-  "portrait": true
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/6.3",
+   "shutter": "1/200s",
+   "iso": "ISO 800",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-17",
@@ -549,7 +819,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/1.8",
+   "shutter": "1/200s",
+   "iso": "ISO 50",
+   "focal": "50mm"
+  }
  },
  {
   "id": "sanjiang-18",
@@ -561,7 +839,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/125s",
+   "iso": "ISO 400",
+   "focal": "50mm"
+  }
  },
  {
   "id": "city-01",
@@ -573,7 +859,15 @@
   "w": 1800,
   "h": 1010,
   "ratio": 1.781,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "EF28-80mm f/3.5-5.6 USM",
+   "aperture": "f/8",
+   "shutter": "1/320s",
+   "iso": "ISO 400",
+   "focal": "80mm"
+  }
  },
  {
   "id": "city-02",
@@ -585,7 +879,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/14",
+   "shutter": "1/100s",
+   "iso": "ISO 640",
+   "focal": "105mm"
+  }
  },
  {
   "id": "city-03",
@@ -597,7 +899,15 @@
   "w": 1800,
   "h": 1010,
   "ratio": 1.781,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/1.8",
+   "shutter": "1/250s",
+   "iso": "ISO 500",
+   "focal": "50mm"
+  }
  },
  {
   "id": "city-04",
@@ -609,7 +919,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "EF17-40mm f/4L USM",
+   "aperture": "f/8",
+   "shutter": "1/4000s",
+   "iso": "ISO 800",
+   "focal": "40mm"
+  }
  },
  {
   "id": "city-05",
@@ -621,7 +939,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF24-105mm F4-7.1 IS STM",
+   "aperture": "f/14",
+   "shutter": "1/160s",
+   "iso": "ISO 320",
+   "focal": "105mm"
+  }
  },
  {
   "id": "city-06",
@@ -633,7 +959,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/9",
+   "shutter": "1/50s",
+   "iso": "ISO 250",
+   "focal": "50mm"
+  }
  },
  {
   "id": "city-07",
@@ -645,7 +979,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/160s",
+   "iso": "ISO 1600",
+   "focal": "50mm"
+  }
  },
  {
   "id": "city-08",
@@ -657,7 +999,8 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "city-09",
@@ -669,7 +1012,15 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R8",
+   "lens": "RF50mm F1.8 STM",
+   "aperture": "f/8",
+   "shutter": "1/125s",
+   "iso": "ISO 160",
+   "focal": "50mm"
+  }
  },
  {
   "id": "city-10",
@@ -681,7 +1032,8 @@
   "w": 1389,
   "h": 1800,
   "ratio": 0.772,
-  "portrait": true
+  "portrait": true,
+  "shot": null
  },
  {
   "id": "portrait-01",
@@ -693,7 +1045,8 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": null
  },
  {
   "id": "portrait-02",
@@ -705,7 +1058,8 @@
   "w": 1200,
   "h": 1800,
   "ratio": 0.667,
-  "portrait": true
+  "portrait": true,
+  "shot": null
  },
  {
   "id": "portrait-03",
@@ -717,6 +1071,329 @@
   "w": 1800,
   "h": 1200,
   "ratio": 1.5,
-  "portrait": false
+  "portrait": false,
+  "shot": null
+ },
+ {
+  "id": "portrait-04",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "荷间 · 低眉",
+  "src": "assets/img/works/portrait-04.webp",
+  "thumb": "assets/img/works/portrait-04-t.webp",
+  "w": 1800,
+  "h": 1200,
+  "ratio": 1.5,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "Canon EF-S 18-200mm f/3.5-5.6 IS",
+   "aperture": "f/4",
+   "shutter": "1/125s",
+   "iso": "ISO 3200",
+   "focal": "32mm"
+  }
+ },
+ {
+  "id": "portrait-05",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "古窗 · 侧影",
+  "src": "assets/img/works/portrait-05.webp",
+  "thumb": "assets/img/works/portrait-05-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS R6 Mark III",
+   "aperture": "f/5.6",
+   "shutter": "1/400s",
+   "iso": "ISO 200",
+   "focal": "50mm"
+  }
+ },
+ {
+  "id": "portrait-06",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "竹林 · 回眸",
+  "src": "assets/img/works/portrait-06.webp",
+  "thumb": "assets/img/works/portrait-06-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": null
+ },
+ {
+  "id": "portrait-07",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "窗边 · 光影",
+  "src": "assets/img/works/portrait-07.webp",
+  "thumb": "assets/img/works/portrait-07-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "EF-S18-200mm f/3.5-5.6 IS",
+   "aperture": "f/4",
+   "shutter": "1/100s",
+   "iso": "ISO 200",
+   "focal": "32mm"
+  }
+ },
+ {
+  "id": "portrait-08",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "水畔 · 凝望",
+  "src": "assets/img/works/portrait-08.webp",
+  "thumb": "assets/img/works/portrait-08-t.webp",
+  "w": 1800,
+  "h": 1200,
+  "ratio": 1.5,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "EF-S18-200mm f/3.5-5.6 IS",
+   "aperture": "f/5",
+   "shutter": "1/200s",
+   "iso": "ISO 3200",
+   "focal": "60mm"
+  }
+ },
+ {
+  "id": "portrait-09",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "檐下 · 执扇",
+  "src": "assets/img/works/portrait-09.webp",
+  "thumb": "assets/img/works/portrait-09-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "aperture": "f/5.6",
+   "shutter": "1/250s",
+   "iso": "ISO 800",
+   "focal": "80mm"
+  }
+ },
+ {
+  "id": "portrait-10",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "玉兰 · 假寐",
+  "src": "assets/img/works/portrait-10.webp",
+  "thumb": "assets/img/works/portrait-10-t.webp",
+  "w": 1800,
+  "h": 1274,
+  "ratio": 1.413,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "aperture": "f/4",
+   "shutter": "1/161s",
+   "iso": "ISO 800",
+   "focal": "28mm"
+  }
+ },
+ {
+  "id": "portrait-11",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "古宅 · 端坐",
+  "src": "assets/img/works/portrait-11.webp",
+  "thumb": "assets/img/works/portrait-11-t.webp",
+  "w": 1800,
+  "h": 1189,
+  "ratio": 1.514,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "aperture": "f/5.6",
+   "shutter": "1/200s",
+   "iso": "ISO 400",
+   "focal": "24mm"
+  }
+ },
+ {
+  "id": "portrait-12",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "执剑 · 少年",
+  "src": "assets/img/works/portrait-12.webp",
+  "thumb": "assets/img/works/portrait-12-t.webp",
+  "w": 1800,
+  "h": 1200,
+  "ratio": 1.5,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R6 Mark III",
+   "aperture": "f/5.6",
+   "shutter": "1/400s",
+   "iso": "ISO 200",
+   "focal": "50mm"
+  }
+ },
+ {
+  "id": "portrait-13",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "白裙 · 浅笑",
+  "src": "assets/img/works/portrait-13.webp",
+  "thumb": "assets/img/works/portrait-13-t.webp",
+  "w": 1800,
+  "h": 1351,
+  "ratio": 1.332,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "Canon EF-S 18-200mm f/3.5-5.6 IS",
+   "aperture": "f/6.3",
+   "shutter": "1/160s",
+   "iso": "ISO 400",
+   "focal": "32mm"
+  }
+ },
+ {
+  "id": "portrait-14",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "草帽 · 玫瑰",
+  "src": "assets/img/works/portrait-14.webp",
+  "thumb": "assets/img/works/portrait-14-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": null
+ },
+ {
+  "id": "portrait-15",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "花丛 · 抱花",
+  "src": "assets/img/works/portrait-15.webp",
+  "thumb": "assets/img/works/portrait-15-t.webp",
+  "w": 1800,
+  "h": 1200,
+  "ratio": 1.5,
+  "portrait": false,
+  "shot": {
+   "aperture": "f/8",
+   "shutter": "1/161s",
+   "iso": "ISO 800",
+   "focal": "70mm"
+  }
+ },
+ {
+  "id": "portrait-16",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "红玫 · 手捧花束",
+  "src": "assets/img/works/portrait-16.webp",
+  "thumb": "assets/img/works/portrait-16-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "EF-S18-200mm f/3.5-5.6 IS",
+   "aperture": "f/4",
+   "shutter": "1/125s",
+   "iso": "ISO 200",
+   "focal": "28mm"
+  }
+ },
+ {
+  "id": "portrait-17",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "舞台 · 少年",
+  "src": "assets/img/works/portrait-17.webp",
+  "thumb": "assets/img/works/portrait-17-t.webp",
+  "w": 1800,
+  "h": 1254,
+  "ratio": 1.435,
+  "portrait": false,
+  "shot": null
+ },
+ {
+  "id": "portrait-18",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "少女 · 黑衫",
+  "src": "assets/img/works/portrait-18.webp",
+  "thumb": "assets/img/works/portrait-18-t.webp",
+  "w": 1199,
+  "h": 1800,
+  "ratio": 0.666,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS 5D Mark II",
+   "aperture": "f/7.1",
+   "shutter": "1/50s",
+   "iso": "ISO 400",
+   "focal": "50mm"
+  }
+ },
+ {
+  "id": "portrait-19",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "树荫 · 仰首",
+  "src": "assets/img/works/portrait-19.webp",
+  "thumb": "assets/img/works/portrait-19-t.webp",
+  "w": 1800,
+  "h": 1200,
+  "ratio": 1.5,
+  "portrait": false,
+  "shot": {
+   "camera": "Canon EOS R6 Mark III",
+   "aperture": "f/5.6",
+   "shutter": "1/667s",
+   "focal": "50mm"
+  }
+ },
+ {
+  "id": "portrait-20",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "绿意 · 白裙",
+  "src": "assets/img/works/portrait-20.webp",
+  "thumb": "assets/img/works/portrait-20-t.webp",
+  "w": 1200,
+  "h": 1800,
+  "ratio": 0.667,
+  "portrait": true,
+  "shot": {
+   "camera": "Canon EOS 760D",
+   "lens": "EF-S18-200mm f/3.5-5.6 IS",
+   "aperture": "f/10",
+   "shutter": "1/125s",
+   "iso": "ISO 400",
+   "focal": "35mm"
+  }
+ },
+ {
+  "id": "portrait-21",
+  "cat": "portrait",
+  "group": "人像与视觉",
+  "title": "逆光 · 凝视",
+  "src": "assets/img/works/portrait-21.webp",
+  "thumb": "assets/img/works/portrait-21-t.webp",
+  "w": 1179,
+  "h": 784,
+  "ratio": 1.504,
+  "portrait": false,
+  "shot": null
  }
 ]

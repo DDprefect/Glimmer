@@ -262,7 +262,7 @@
 
   /* ---------------------------------------------------------- 灯箱 */
   var LB = (function () {
-    var el, imgEl, capEl, countEl, list = [], idx = 0;
+    var el, imgEl, capEl, countEl, exifEl, list = [], idx = 0;
 
     function build() {
       el = document.createElement("div");
@@ -284,12 +284,14 @@
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 5l7 7-7 7"/></svg>' +
           "</button>" +
         "</div>" +
-        '<div class="lb__cap"><h3></h3><p></p></div>';
+        '<div class="lb__cap"><h3></h3><p></p></div>' +
+        '<div class="lb__exif"></div>';
 
       document.body.appendChild(el);
       imgEl   = $(".lb__img", el);
       capEl   = $(".lb__cap h3", el);
       countEl = $(".lb__count", el);
+      exifEl  = $(".lb__exif", el);
 
       $(".lb__close", el).addEventListener("click", close);
       $(".lb__nav--prev", el).addEventListener("click", function () { go(-1); });
@@ -324,14 +326,51 @@
       capEl.textContent = it.title || "";
       $(".lb__cap p", el).textContent = it.sub || it.group || "";
       countEl.textContent = String(idx + 1).padStart(2, "0") + " / " + String(list.length).padStart(2, "0");
+      if (exifEl) exifEl.innerHTML = exifLine(it.shot);
+    }
+
+    /* 拍摄信息行：机型 · 镜头 · 光圈 快门 ISO 焦段
+       字段由 _tools/build_assets.py 从原图 EXIF 自动抽取，缺字段自动跳过 */
+    function exifLine(shot) {
+      if (!shot) return "";
+      var out = [];
+      ["camera", "lens"].forEach(function (k) {
+        if (shot[k]) out.push("<i>" + esc(shot[k]) + "</i>");
+      });
+      var spec = ["aperture", "shutter", "iso", "focal"].map(function (k) {
+        return shot[k] ? esc(shot[k]) : "";
+      }).filter(Boolean).join(" · ");
+      if (spec) out.push(spec);
+      if (shot.date) out.push(esc(shot.date));
+      return out.join("　");
+    }
+
+    /* 切换上下张。
+       旧实现是 animation:none → void offsetWidth → animation:""，
+       「强制同步布局 + 重挂动画」会让图片先跳回基准态再重新缩放，看起来就是二次抽动。
+       现在改为：只做一次极短的透明度过渡（is-step），完全不动 transform。 */
+    function step(d) {
+      imgEl.classList.add("is-step");
+      imgEl.style.opacity = "0";
+      var done = false;
+      var swap = function () {
+        if (done) return;
+        done = true;
+        imgEl.style.opacity = "";
+        render();
+      };
+      // transitionend 为主，setTimeout 兜底（换图不触发 transition 时也能推进）
+      imgEl.addEventListener("transitionend", function onEnd(e) {
+        if (e.propertyName !== "opacity") return;
+        imgEl.removeEventListener("transitionend", onEnd);
+        swap();
+      });
+      setTimeout(swap, 200);
     }
 
     function go(d) {
       idx = (idx + d + list.length) % list.length;
-      imgEl.style.animation = "none";
-      void imgEl.offsetWidth;
-      imgEl.style.animation = "";
-      render();
+      step(d);
     }
 
     function open(items, i) {
