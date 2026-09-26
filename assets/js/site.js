@@ -17,6 +17,7 @@
     { href: "index.html",   label: "首页",     en: "Home"  },
     { href: "gallery.html", label: "作品集",   en: "Works" },
     { href: "about.html",   label: "关于我们", en: "About" },
+    { href: "share.html",   label: "分享微光", en: "Share" },
     { href: "join.html",    label: "加入微光", en: "Join"  }
   ];
 
@@ -445,6 +446,73 @@
   }
   window.Glimmer.eagerAll = eagerAll;
 
+  /* ---------------------------------------------------------- 分享与复制
+     [data-copy]      复制按钮自带的值
+     [data-copy-link] 复制当前页链接
+     [data-copy-blurb]复制「标题 + 描述 + 链接」的整段分享文案
+     [data-share-qq]  调起 QQ 官方网页分享（抖音无网页分享接口，走复制） */
+  function shareBits() {
+    var pageUrl = location.href.split("#")[0];
+    var title = document.title;
+    var meta = document.querySelector('meta[name="description"]');
+    var desc = (meta && meta.getAttribute("content")) || SITE.slogan;
+
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand("copy") ? resolve() : reject(); }
+        catch (e) { reject(e); }
+        ta.remove();
+      });
+    }
+
+    // 临时改文案做反馈：备份 innerHTML，避免把按钮里的箭头图标弄丢
+    function flash(el, txt) {
+      if (!el.dataset.origHtml) el.dataset.origHtml = el.innerHTML;
+      el.innerHTML = txt;
+      el.classList.add("is-done");
+      setTimeout(function () {
+        el.innerHTML = el.dataset.origHtml;
+        el.classList.remove("is-done");
+      }, 1800);
+    }
+
+    function bindCopy(sel, getText, okText) {
+      $$(sel).forEach(function (b) {
+        b.addEventListener("click", function () {
+          copyText(getText(b)).then(function () { flash(b, okText); },
+            function () { flash(b, "复制失败，请手动选择"); });
+        });
+      });
+    }
+
+    bindCopy("[data-copy]", function (b) { return b.getAttribute("data-copy"); }, "已复制 ✓");
+    bindCopy("[data-copy-link]", function () { return pageUrl; }, "链接已复制 ✓");
+    bindCopy("[data-copy-blurb]", function () {
+      return title + "\n" + desc + "\n" + pageUrl;
+    }, "分享文案已复制 ✓");
+
+    $$("[data-share-qq]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var u = "https://connect.qq.com/widget/shareqq/index.html?url=" +
+          encodeURIComponent(pageUrl) +
+          "&title=" + encodeURIComponent(title) +
+          "&summary=" + encodeURIComponent(desc) +
+          "&source=" + encodeURIComponent(SITE.name);
+        window.open(u, "_blank", "noopener,noreferrer,width=760,height=640");
+      });
+    });
+  }
+
   /* ---------------------------------------------------------- 启动 */
   function boot() {
     curtain();
@@ -453,6 +521,7 @@
     reveals();
     counters();
     parallax();
+    shareBits();
     // 截图模式下的起始偏移：?shot=1&begin=4000
     if (SHOT) {
       var b = location.search.match(/begin=(\d+)/);
