@@ -1,0 +1,16 @@
+{
+  "name": "glimmer-photography-agency",
+  "version": "1.0.0",
+  "description": "柳铁一中微光摄影社官方网站 - Glimmer Photography Agency",
+  "private": true,
+  "scripts": {
+    "dev": "python -m http.server 8848",
+    "build": "echo 'Static site - no build required'"
+  },
+  "keywords": ["photography", "static-site"],
+  "author": "Glimmer Photography Agency",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@vercel/analytics": "^1.1.1"
+  }
+}
