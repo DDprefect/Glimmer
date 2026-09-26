@@ -62,7 +62,10 @@
 
     <div class="channels" data-reveal>
       <div class="channel">
-        <img class="channel__qr" src="assets/img/brand/douyin-qr.png" alt="微光摄影社抖音二维码" loading="lazy" decoding="async" width="864" height="864">
+        <div>
+          <img class="channel__qr" src="assets/img/brand/douyin-qr.png" alt="微光摄影社抖音二维码" loading="lazy" decoding="async" width="788" height="788" data-zoom>
+          <p class="channel__hint">点击二维码可放大扫描</p>
+        </div>
         <div class="channel__body">
           <span class="channel__kicker">Douyin　抖音</span>
           <div class="channel__name">抖音官方账号</div>
@@ -75,14 +78,16 @@
       </div>
 
       <div class="channel">
-        <img class="channel__qr" src="assets/img/brand/qq-qr.png" alt="微光摄影社官方 QQ 二维码" loading="lazy" decoding="async" width="518" height="518">
+        <div>
+          <img class="channel__qr" src="assets/img/brand/qq-qr.png" alt="微光摄影社官方 QQ 二维码" loading="lazy" decoding="async" width="592" height="592" data-zoom>
+          <p class="channel__hint">点击二维码可放大扫描</p>
+        </div>
         <div class="channel__body">
           <span class="channel__kicker">QQ　官方 QQ</span>
           <div class="channel__name">官方 QQ</div>
           <div class="channel__id">QQ：1159554310</div>
           <div class="channel__act">
             <button class="chip" type="button" data-copy="1159554310">复制 QQ 号</button>
-            <a class="chip" href="https://wpa.qq.com/msgrd?v=3&amp;uin=1159554310&amp;site=qq&amp;menu=yes" target="_blank" rel="noopener">加为好友</a>
           </div>
         </div>
       </div>
@@ -102,14 +107,11 @@
     </div>
 
     <p class="lede" style="max-width:56ch" data-reveal>
-      一键把本站分享到 QQ，或复制链接与分享文案，发送到抖音、微信或班级群。
+      复制本站链接或分享文案，一键发送到抖音、微信或班级群。
     </p>
 
     <div class="share-actions" style="margin-top:clamp(28px,3.6vw,44px)" data-reveal>
-      <button class="btn" type="button" data-share-qq style="background:#fff;color:var(--ink);border-color:#fff">
-        分享到 QQ <span class="btn__arrow">→</span>
-      </button>
-      <button class="btn btn--light" type="button" data-copy-link>复制本站链接</button>
+      <button class="btn" type="button" data-copy-link style="background:#fff;color:var(--ink);border-color:#fff">复制本站链接</button>
       <button class="btn btn--light" type="button" data-copy-blurb>复制分享文案</button>
     </div>
 

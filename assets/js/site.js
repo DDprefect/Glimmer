@@ -394,6 +394,48 @@
 
   window.Lightbox = LB;
 
+  /* ---------------------------------------------------------- 二维码放大
+     点击 [data-zoom] 的二维码，弹出可放大查看的浮层，方便手机扫码。
+     仅做轻量放大，不依赖任何外部库。 */
+  var ZOOM = (function () {
+    var el, imgEl;
+    function ensure() {
+      if (el) return;
+      el = document.createElement("div");
+      el.className = "zoom";
+      el.setAttribute("aria-hidden", "true");
+      el.innerHTML =
+        '<div class="zoom__inner">' +
+          '<img alt="二维码大图">' +
+          '<p class="zoom__hint">点击空白处关闭 · 长按可保存</p>' +
+        "</div>";
+      document.body.appendChild(el);
+      imgEl = el.querySelector("img");
+      el.addEventListener("click", close);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && el.classList.contains("is-open")) close();
+      });
+    }
+    function open(src) {
+      ensure();
+      imgEl.src = src;
+      el.classList.add("is-open");
+      document.body.style.overflow = "hidden";
+    }
+    function close() {
+      if (!el || !el.classList.contains("is-open")) return;
+      el.classList.remove("is-open");
+      document.body.style.overflow = "";
+    }
+    return { open: open, close: close };
+  })();
+
+  function bindZoom() {
+    $$("[data-zoom]").forEach(function (img) {
+      img.addEventListener("click", function () { ZOOM.open(img.getAttribute("src")); });
+    });
+  }
+
   /* ---------------------------------------------------------- 作品卡片 */
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
@@ -449,30 +491,38 @@
   /* ---------------------------------------------------------- 分享与复制
      [data-copy]      复制按钮自带的值
      [data-copy-link] 复制当前页链接
-     [data-copy-blurb]复制「标题 + 描述 + 链接」的整段分享文案
-     [data-share-qq]  调起 QQ 官方网页分享（抖音无网页分享接口，走复制） */
+     [data-copy-blurb]复制「标题 + 描述 + 链接」的整段分享文案 */
   function shareBits() {
     var pageUrl = location.href.split("#")[0];
     var title = document.title;
     var meta = document.querySelector('meta[name="description"]');
     var desc = (meta && meta.getAttribute("content")) || SITE.slogan;
 
+    // 复制文本。注意：双击 index.html 走 file:// 时浏览器不是安全上下文，
+    // navigator.clipboard 可能不存在、也可能存在但 writeText 直接 reject。
+    // 因此只在「安全上下文」且 API 可用时才用原生接口，任何失败都回落到 execCommand。
     function copyText(text) {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text);
+      function legacy() {
+        return new Promise(function (resolve, reject) {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.top = "-1000px";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          ta.setSelectionRange(0, text.length);
+          var ok = false;
+          try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+          ta.remove();
+          ok ? resolve() : reject();
+        });
       }
-      return new Promise(function (resolve, reject) {
-        var ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.top = "-1000px";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand("copy") ? resolve() : reject(); }
-        catch (e) { reject(e); }
-        ta.remove();
-      });
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).catch(function () { return legacy(); });
+      }
+      return legacy();
     }
 
     // 临时改文案做反馈：备份 innerHTML，避免把按钮里的箭头图标弄丢
@@ -500,17 +550,6 @@
     bindCopy("[data-copy-blurb]", function () {
       return title + "\n" + desc + "\n" + pageUrl;
     }, "分享文案已复制 ✓");
-
-    $$("[data-share-qq]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var u = "https://connect.qq.com/widget/shareqq/index.html?url=" +
-          encodeURIComponent(pageUrl) +
-          "&title=" + encodeURIComponent(title) +
-          "&summary=" + encodeURIComponent(desc) +
-          "&source=" + encodeURIComponent(SITE.name);
-        window.open(u, "_blank", "noopener,noreferrer,width=760,height=640");
-      });
-    });
   }
 
   /* ---------------------------------------------------------- 启动 */
@@ -522,6 +561,7 @@
     counters();
     parallax();
     shareBits();
+    bindZoom();
     // 截图模式下的起始偏移：?shot=1&begin=4000
     if (SHOT) {
       var b = location.search.match(/begin=(\d+)/);
