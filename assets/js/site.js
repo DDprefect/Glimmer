@@ -356,6 +356,7 @@
       var swap = function () {
         if (done) return;
         done = true;
+        imgEl.classList.remove("is-step");
         imgEl.style.opacity = "";
         render();
       };

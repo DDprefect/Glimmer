@@ -71,12 +71,15 @@ setTimeout(() => {
   ok("切换完成后 is-step 已摘除", !/is-step/.test(img.className), img.className);
 
   console.log("\n=== 5. CSS 层：静态基准态与动画终态必须对齐 ===");
-  const staticT = (css.match(/\.hero__slide img\s*\{[^}]*transform:\s*scale\(([\d.]+)\)/) || [])[1];
-  const kbTo = (css.match(/@keyframes kenburns\s*\{[^}]*to\s*\{[^}]*scale\(([\d.]+)\)/) || [])[1];
-  ok("hero 静态基准 scale 已取到", !!staticT, staticT);
+  const cc = css.replace(/\s+/g, " ");
+  // 真实文本比对（避免 translate3d 里的括号干扰正则）
+  const heroStatic = cc.match(/\.hero__slide img\s*\{[^}]*transform:\s*(scale\([\d.]+\))/);
+  const kbTo = cc.match(/@keyframes kenburns\s*\{[^]*to\s*\{[^}]*transform:\s*(scale\([\d.]+\))[^}]*\}/);
+  const lbInTo = cc.match(/@keyframes lbIn\s*\{[^]*to\s*\{[^}]*transform:\s*(none|scale\([\d.]+\))/);
+  ok("hero 静态基准 scale 已取到", !!(heroStatic && heroStatic[1]), heroStatic && heroStatic[1]);
   ok("hero 静态基准 === kenburns 终态（关键：否则重挂动画必抽一下）",
-     staticT && kbTo && staticT === kbTo, staticT + " vs " + kbTo);
-  ok("lbIn 终态是 scale 1（与静态态一致）", /@keyframes lbIn[^}]*to\s*\{[^}]*transform:\s*none/.test(css.replace(/\s+/g, " ")));
+     heroStatic && kbTo && heroStatic[1] === kbTo[1], (heroStatic && heroStatic[1]) + " vs " + (kbTo && kbTo[1]));
+  ok("lbIn 终态是 none（与静态态一致，scale 1）", lbInTo && lbInTo[1] === "none", lbInTo && lbInTo[1]);
   ok(".lb__img.is-step 显式关掉 animation", /\.lb__img\.is-step\s*\{[^}]*animation:\s*none/.test(css.replace(/\s+/g, " ")));
   ok("hero 交叉淡入：下层带 transition-delay", /\.hero__slide\s*\{[^}]*transition:\s*opacity[^}]*\d+m?s/.test(css.replace(/\s+/g, " ")));
 
