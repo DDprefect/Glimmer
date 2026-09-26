@@ -11,6 +11,12 @@ _tools/dims.py
 _tools/check_logo.py
 _tools/logo_preview.py
 
+# 脚本调试时落下的临时输出
+_tools/_r.txt
+_tools/_ps_out.txt
+_tools/_strip.html
+_tools/_mid.html
+
 # 部署副本（发布时生成的干净拷贝，不入库）
 _deploy/
 

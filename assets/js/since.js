@@ -1,8 +1,17 @@
 /* ==========================================================================
    微光摄影社 · 运行时长度量
    自 2016-09-10 00:00 起持续走动的「年 / 天 / 时 / 分 / 秒」。
-   数字用纵向滚动的里程表（odometer）呈现，递增方向上滚。
+   数字用纵向滚动的里程表（odometer）呈现：数值递增时画面向下推进。
    无依赖，原生实现，file:// 直接打开亦可正常工作。
+
+   —— 滚动实现要点（别改回去）——
+   每一位渲染成一条「静态条带」，读数变化只改 CSS 变量 --n，
+   位移交给 transform 表达：滚动过程零 DOM 增删、零强制回流，全程走合成层。
+   早期版本是「每次变化现场造一个临时数字节点」，带来了三重问题：
+     ① 旧值被写成裸文本节点、新值才是元素 → 两者行高不同，相邻顺序还会
+        因 i % 2 而互换，于是出现「4 上方是 3」而不是 5；
+     ② .since__num 的 align-items:center 会把变高后的条带居中掉半格 → 错位；
+     ③ 每帧强制回流 + 双 rAF 起步 + 兜底定时器 → 每秒一次重排，观感卡顿。
    ========================================================================== */
 (function () {
   "use strict";
@@ -11,7 +20,6 @@
   var START = new Date(2016, 8, 10, 0, 0, 0, 0);
 
   var $  = function (s, r) { return (r || document).querySelector(s); };
-  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
   var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 截图/调试模式：只呈静态真值，不做任何滚动（否则截到滚动中间帧会叠字）
@@ -39,117 +47,117 @@
   }
 
   /* ---------------------------------------------------------------- 里程表 */
-  /* 每一「位」的取值交替向上/向下滚动，视觉上整组数字朝同一方向推进 */
-  function Reel(el) {
-    this.el = el;
-    this.digits = [];   // { up: bool }
-    this.text = null;
+  /* 条带自上而下数值递减 —— 与「递增时画面下移」严格对应：
+     显示在窗口里的数字，其正上方永远比它大 1（4 的上方是 5）。
+       idx :  0 | 1  2  3  4  5  6  7  8  9  10 | 11 12 13 ... 20
+       val :  0 | 9  8  7  6  5  4  3  2  1   0 |  9  8  7  ...  0
+                └─ 上环（绕回 / 进位时借用）──┘└─── 常驻环 ───┘
+     同一数值在条带上至少有两处（常驻环 + 上环），每次取「严格高于当前位置、
+     且距离最近」的那一个，于是任何变化（含 9→0、进位 5→0）都只向下走一格，
+     永远不会倒着滚回去。                                                    */
+  var HOME  = 20;   // 常驻环：数值 v 的常驻下标 = HOME - v
+  var UPPER = 10;   // 上环：  数值 v 的上环下标 = UPPER - v（v = 0 额外还有下标 0）
+
+  /* 条带上第 k 格是什么数字 */
+  function cellValue(k) {
+    if (k === 0) return 0;
+    return k <= UPPER ? UPPER - k : HOME - k;
   }
 
-  Reel.prototype.render = function (value) {
-    var next = String(value);
-    if (this.text === next) return;
-
-    // 首次渲染：直接落在终值，绝不做 0 → 真值 的补间
-    // 注意不能靠 DOM 是否为空判断 —— HTML 里已放了占位数字，首帧一定是「有内容」的
-    var fresh = this.text === null;
-    if (fresh) {
-      this.el.textContent = next;
-      this.text = next;
-      this._build();
-      return;
+  /* 从当前下标 cur 出发，找到数值 v 的那个「向下可及、且最近」的下标 */
+  function nearestBelow(cur, v) {
+    var cand = [HOME - v, UPPER - v];
+    if (v === 0) cand.push(0);
+    var best = -1, i;
+    for (i = 0; i < cand.length; i++) {
+      if (cand[i] < cur && cand[i] > best) best = cand[i];
     }
-
-    var recompose = next.length !== this.text.length;
-    if (recompose) {
-      // 位数变化（如 999 → 1000）：拆解重建，此帧不做位移
-      this.el.textContent = next;
-      this.text = next;
-      this._build();
-      return;
+    if (best < 0) {                       // 兜底：已在条带顶端，取最近的一处
+      best = cand[0];
+      for (i = 1; i < cand.length; i++) if (cand[i] < best) best = cand[i];
     }
+    return best;
+  }
 
-    // 逐位对比，只滚动发生变化的位
-    for (var i = 0; i < next.length; i++) {
-      if (next[i] !== this.text[i]) this._spin(i, next[i]);
-    }
-    this.text = next;
-  };
+  function Reel(el) {
+    this.el = el;
+    this.slots = [];   // { node, v, idx }
+    this.value = null;
+  }
 
-  Reel.prototype._build = function () {
-    var str = this.text;
+  /* 一次性铺好每一位整整 21 格，此后不再碰 DOM 结构 */
+  Reel.prototype._build = function (text) {
+    this.value = text;
     this.el.textContent = "";
-    this.digits = [];
-    var self = this;
+    this.slots = [];
+    // 条带里含 0–9 全部数字，读屏会把它们读成一串乱码：视觉层整体隐藏，
+    // 真正的读数走 [data-since-sr] 那条 aria-live 通道。
+    this.el.setAttribute("aria-hidden", "true");
 
-    Array.prototype.forEach.call(str, function (ch, i) {
+    for (var i = 0; i < text.length; i++) {
       var slot = document.createElement("span");
       slot.className = "since__reel";
-      var d = document.createElement("span");
-      d.className = "since__digit";
-      d.textContent = ch;
-      slot.appendChild(d);
-      self.el.appendChild(slot);
-      // 交替方向：相邻位一上一下，滚动时像机械牌翻面
-      self.digits.push({ up: i % 2 === 0, node: slot, value: ch, settle: null, timer: null });
-    });
+      for (var k = 0; k <= HOME; k++) {
+        var cell = document.createElement("span");
+        cell.className = "since__digit";
+        cell.textContent = String(cellValue(k));
+        slot.appendChild(cell);
+      }
+      this.el.appendChild(slot);
 
-    // 位数增长（如 9→10）时重建，只需落到正确读数；不做额外动效，避免整块闪动
+      var v = +text.charAt(i);
+      var idx = HOME - v;
+      slot.style.setProperty("--n", idx);      // 初值：直接落在真值，不做 0 → 真值 的补间
+      this.slots.push({ node: slot, v: v, idx: idx });
+    }
   };
 
-  /* 单次滚动：在当前数字正上方（或正下方）补一位，滚动到它。
-     关键：每次滚动都从「干净的单个数字」基线出发 —— 若上一次滚动尚未收敛
-     （快速连续 tick / 切回前台），先把它一次性收尾，避免多个副本叠加导致读数串位。 */
-  Reel.prototype._spin = function (i, ch) {
-    var d = this.digits[i];
-    if (!d) return;
-    var slot = d.node;
+  /* 单个数位推进到新值 */
+  Reel.prototype._roll = function (i, v, animate) {
+    var slot = this.slots[i];
+    if (!slot || slot.v === v) return;
 
-    // 收尾上一轮未完成的滚动
-    if (d.timer) { clearTimeout(d.timer); d.timer = null; }
-    if (d.settle) { slot.removeEventListener("transitionend", d.settle); d.settle = null; }
-    slot.style.transition = "none";
-    slot.style.transform = "none";
-    slot.textContent = d.value;                               // 只留上一轮终值单个数字
-
-    d.value = ch;
-
-    if (still) { slot.textContent = ch; return; }
-
-    // 单格高度以 CSS 的 --digit-h 为准（与视窗高度、位移步长同源）
-    var step = this.step || "1.34em";
-    var ghost = document.createElement("span");
-    ghost.className = "since__digit";
-    ghost.textContent = ch;
-    ghost.setAttribute("aria-hidden", "true");   // 过渡用的临时数字，读屏不读
-
-    if (d.up) {
-      slot.insertBefore(ghost, slot.firstChild);              // 新值在上，向下滑入
-    } else {
-      slot.appendChild(ghost);                                // 新值在下，视窗上移
+    if (!animate) {
+      var j = HOME - v;
+      slot.node.style.setProperty("--n", j);
+      slot.v = v;
+      slot.idx = j;
+      return;
     }
-    slot.style.transform = "translateY(calc(-1 * " + step + "))";  // 停在「旧值」那一格
 
-    var settle = function () {
-      slot.removeEventListener("transitionend", settle);
-      if (d.timer) { clearTimeout(d.timer); d.timer = null; }
-      d.settle = null;
-      slot.textContent = ch;                                  // 收敛为单个终值
-      slot.style.transition = "none";
-      slot.style.transform = "none";
-      void slot.offsetWidth;
-      slot.style.transition = "";
-    };
-    d.settle = settle;
+    // 上一个读数停在了上环（例如进位后借道），先不动声色地归位到常驻环。
+    // 这里的一次强制回流约每十来次变化才发生一次，而非每秒一次。
+    if (slot.idx <= UPPER) {
+      var back = HOME - slot.v;
+      this.el.classList.add("is-jam");        // 临时掐掉过渡，归位不能被看见
+      slot.node.style.setProperty("--n", back);
+      slot.idx = back;
+      void this.el.offsetHeight;              // 冲刷样式，让归位真正生效
+      this.el.classList.remove("is-jam");
+    }
 
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        slot.style.transition = "transform .62s cubic-bezier(.34,.06,.16,1)";
-        slot.style.transform = "none";                        // 滑到目标位
-        slot.addEventListener("transitionend", settle);
-        d.timer = setTimeout(settle, 720);                     // 兜底：transitionend 偶发丢失
-      });
-    });
+    var target = nearestBelow(slot.idx, v);
+    slot.node.style.setProperty("--n", target);
+    slot.v = v;
+    slot.idx = target;
+  };
+
+  Reel.prototype.render = function (value, animate) {
+    var next = String(value);
+    var prev = this.value;
+
+    // 首次渲染 / 位数变化（如 099 → 100）：拆解重建，直接落到真值，此帧不做位移
+    if (prev === null || next.length !== prev.length) {
+      this._build(next);
+      return;
+    }
+    if (next === prev) return;
+
+    // 逐位对比，只推进发生变化的位
+    for (var i = 0; i < next.length; i++) {
+      if (next.charAt(i) !== prev.charAt(i)) this._roll(i, +next.charAt(i), animate);
+    }
+    this.value = next;
   };
 
   /* ---------------------------------------------------------------- 装配 */
@@ -165,26 +173,17 @@
     reels.m = new Reel($('[data-since-reel="m"]', root));
     reels.s = new Reel($('[data-since-reel="s"]', root));
 
-    // 与 CSS 的 --digit-h 对齐：位移步长 = 视窗高度 = 单格高度
-    var refNum = reels.y.el;
-    var step = "1.34em";
-    if (window.getComputedStyle) {
-      var sz = window.getComputedStyle(refNum);
-      if (sz && sz.height && sz.height !== "auto") step = sz.height;
-    }
-    dims.forEach(function (k) { reels[k].step = step; });
-
     var sr = $("[data-since-sr]", root);
     var seen = false;
 
-    function tick() {
+    function tick(animate) {
       var t = breakdown(new Date());
       for (var i = 0; i < dims.length; i++) {
         var k = dims[i];
         var v = t[k];
         // 天/时/分/秒固定两位，滚动更整齐；年不补零
         if (k !== "y" && v < 10) v = "0" + v;
-        reels[k].render(v);
+        reels[k].render(v, animate);
       }
       if (sr) {
         sr.textContent = "微光摄影社自 2016 年 9 月 10 日成立至今，已走过 " +
@@ -192,16 +191,23 @@
       }
     }
 
-    // 先给初值再做入场，避免从 0 起跳
-    tick();
+    // 先给初值（无动画），确认落稳后再打开过渡 —— 首屏绝不会从 0 起跳
+    tick(false);
     seen = true;
+
+    if (!still) {
+      // 下一帧才允许动画：避免开门第一帧就把过渡算进来
+      requestAnimationFrame(function () {
+        dims.forEach(function (k) { reels[k].el.classList.add("is-live"); });
+      });
+    }
 
     // 秒针走动的节拍：对齐到整秒，读数始终真实
     var timer = null;
     function loop() {
       clearTimeout(timer);
       if (document.hidden) return;
-      tick();
+      tick(true);
       var ms = 1000 - (Date.now() % 1000);
       timer = setTimeout(loop, ms + 12);
     }
@@ -217,7 +223,7 @@
     }
 
     // 设备时间/时区被调整时，重新对表
-    window.addEventListener("pageshow", function () { tick(); });
+    window.addEventListener("pageshow", function () { tick(true); });
 
     // 暴露给截图模式复用
     window.Glimmer = window.Glimmer || {};

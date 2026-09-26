@@ -1496,10 +1496,12 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   min-width: 0;
 }
 
-/* 数字滚动视窗：竖向滚动，向上递增。
+/* 数字滚动视窗：数值递增时画面向下推进。
    --digit-h 同时用于视窗高度、单格高度与位移步长 —— 三者必须一致，
    否则滚动会错位或数字被裁。取 1.34em 是为了容纳 Noto Serif SC 900
-   的高字身（1em 会把数字上下切边）。 */
+   的高字身（1em 会把数字上下切边）。
+   align-items 必须是 flex-start：条带比视窗高得多，一旦居中就会被
+   顶掉半格，位移与格线对不齐（这是早期版本错位的根因之一）。 */
 .since__num {
   --digit-h: 1.34em;
   position: relative;
@@ -1507,7 +1509,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   overflow: hidden;
   width: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   font-family: var(--serif);
   font-weight: 900;
@@ -1519,11 +1521,20 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
           mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
 }
+/* 条带：21 格静态数字一次铺好，之后只读 CSS 变量 --n。
+   位移用 em 参与 calc，字号随视口变化时自动跟随，无需 JS 重算步长。
+   滚动只在 transform 上做，浏览器可以整段交给合成层，不触发重排。 */
 .since__reel {
   display: flex;
   flex-direction: column;
+  flex: none;
+  transform: translateY(calc(var(--digit-h) * -1 * var(--n, 0)));
   will-change: transform;
 }
+/* is-live 只在首帧之后才挂上，避免首次读数是滚出来的 */
+.since__num.is-live .since__reel { transition: transform .52s cubic-bezier(.22, .68, .24, 1); }
+/* is-jam：把进位借用过的条带悄悄拨回常驻环，这一下不能被看见 */
+.since__num.is-jam .since__reel { transition: none; }
 .since__digit {
   height: var(--digit-h);
   line-height: 1;
