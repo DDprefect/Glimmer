@@ -26,7 +26,7 @@ setTimeout(() => {
   r.push("data-zoom count  = " + d.querySelectorAll("[data-zoom]").length);
   r.push("data-share-qq    = " + d.querySelectorAll("[data-share-qq]").length + "  (期望 0)");
   r.push("wpa.qq.com link  = " + d.querySelectorAll('a[href*="wpa.qq.com"]').length + "  (期望 0)");
-  r.push("data-copy-blurb  = " + d.querySelectorAll("[data-copy-blurb]").length + "  (期望 1)");
+  r.push("data-copy-blurb  = " + d.querySelectorAll("[data-copy-blurb]").length + "  (期望 0)");
   r.push("data-copy-link   = " + d.querySelectorAll("[data-copy-link]").length + "  (期望 1)");
 
   const qr = d.querySelector("[data-zoom]");
@@ -42,17 +42,13 @@ setTimeout(() => {
     r.push("zoom closed      = " + !z.classList.contains("is-open"));
   }
 
-  // 复制兜底验证：jsdom 无 Clipboard API，应走 execCommand 兜底
+  // 复制兜底验证：jsdom 无 Clipboard API，走 execCommand 兜底（复制分享文案按钮已移除，仅测复制链接）
   d.execCommand = function () { return true; };
-  const blurb = d.querySelector("[data-copy-blurb]");
-  blurb.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
+  r.push("复制分享文案已移除 = " + (d.querySelector("[data-copy-blurb]") ? "否" : "是"));
+  const link = d.querySelector("[data-copy-link]");
+  link.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
   setTimeout(() => {
-    r.push("copy-blurb 反馈  = " + JSON.stringify(blurb.textContent.trim()));
-    const link = d.querySelector("[data-copy-link]");
-    link.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
-    setTimeout(() => {
-      r.push("copy-link 反馈   = " + JSON.stringify(link.textContent.trim()));
-      console.log(r.join("\n"));
-    }, 150);
+    r.push("copy-link 反馈   = " + JSON.stringify(link.textContent.trim()));
+    console.log(r.join("\n"));
   }, 150);
 }, 500);
