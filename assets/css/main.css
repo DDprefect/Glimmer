@@ -1465,3 +1465,116 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   .foot__grid { grid-template-columns: 1fr; }
   .lb__nav { width: 44px; height: 44px; }
 }
+
+/* ==========================================================================
+   24. 运行时长度量 —— 微光成立的每一刻（滚动里程表）
+   ========================================================================== */
+.since {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: clamp(22px, 3.4vw, 34px);
+}
+.since__lede {
+  max-width: 46ch;
+  margin: 18px auto 0;
+  color: rgba(255,255,255,.72);
+}
+.since__grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(8px, 1.8vw, 34px);
+  width: 100%;
+  align-items: start;
+}
+.since__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 数字滚动视窗：竖向滚动，向上递增。
+   --digit-h 同时用于视窗高度、单格高度与位移步长 —— 三者必须一致，
+   否则滚动会错位或数字被裁。取 1.34em 是为了容纳 Noto Serif SC 900
+   的高字身（1em 会把数字上下切边）。 */
+.since__num {
+  --digit-h: 1.34em;
+  position: relative;
+  height: var(--digit-h);
+  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--serif);
+  font-weight: 900;
+  font-size: clamp(2.05rem, 6.2vw, 4.4rem);
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
+          mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 80%, transparent);
+}
+.since__reel {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+}
+.since__digit {
+  height: var(--digit-h);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.since__unit {
+  font-family: var(--mono);
+  font-size: clamp(.6rem, 1.5vw, .72rem);
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.52);
+  white-space: nowrap;
+}
+
+/* 冒号分隔符：仅在窄屏显示。桌面端五列并排时不加冒号，靠留白分隔更干净。 */
+.since__sep {
+  display: none;
+  align-self: center;
+  margin-top: clamp(6px, 1vw, 14px);
+  font-family: var(--serif);
+  font-size: clamp(1.1rem, 3vw, 2rem);
+  line-height: 1;
+  color: rgba(255,255,255,.26);
+}
+
+.since__since {
+  display: inline-flex;
+  align-items: center;
+  gap: .7em;
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .16em;
+  color: rgba(255,255,255,.46);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.since__since b { color: var(--gold-soft); font-weight: 500; letter-spacing: .1em; }
+
+/* 窄屏：三列网格，五个单位自然折行（年天 / 时分 / 秒）。
+   此宽度下不用冒号分隔 —— 折行后冒号会变成孤立占位，反而割裂读数。 */
+@media (max-width: 720px) {
+  .since__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: clamp(22px, 6vw, 32px); column-gap: 6px; }
+  .since__sep { display: none; }
+  .since__cell--sec { grid-column: auto; }
+}
+
+/* 无障碍：视觉隐藏 */
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

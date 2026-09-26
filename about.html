@@ -44,6 +44,61 @@
   </div>
 </header>
 
+<!-- ============================================================ 运行时长度量 -->
+<section class="section dark" id="since" style="padding-block:clamp(56px,7vw,92px)">
+  <div class="wrap-n">
+    <div class="since" data-since data-reveal>
+      <div>
+        <span class="eyebrow eyebrow--light">Runtime　运行时长度量</span>
+        <h2 class="h2" style="margin-top:18px;color:#fff">微光已经走过的时长</h2>
+        <p class="lede since__lede">
+          自 2016 年 9 月 10 日成立起，微光的快门一直没有停下。
+          这一串数字，仍在实时跳动。
+        </p>
+      </div>
+
+      <div class="since__grid" role="group" aria-label="微光摄影社已走过的时长">
+        <div class="since__cell">
+          <span class="since__num" data-since-reel="y"><span class="since__reel"><span class="since__digit">0</span></span></span>
+          <span class="since__unit">年 Years</span>
+        </div>
+
+        <div class="since__cell">
+          <span class="since__num" data-since-reel="d"><span class="since__reel"><span class="since__digit">00</span></span></span>
+          <span class="since__unit">天 Days</span>
+        </div>
+
+        <span class="since__sep since__sep--hr" aria-hidden="true">:</span>
+
+        <div class="since__cell">
+          <span class="since__num" data-since-reel="h"><span class="since__reel"><span class="since__digit">00</span></span></span>
+          <span class="since__unit">时 Hours</span>
+        </div>
+
+        <span class="since__sep" aria-hidden="true">:</span>
+
+        <div class="since__cell">
+          <span class="since__num" data-since-reel="m"><span class="since__reel"><span class="since__digit">00</span></span></span>
+          <span class="since__unit">分 Minutes</span>
+        </div>
+
+        <span class="since__sep" aria-hidden="true">:</span>
+
+        <div class="since__cell since__cell--sec">
+          <span class="since__num" data-since-reel="s"><span class="since__reel"><span class="since__digit">00</span></span></span>
+          <span class="since__unit">秒 Seconds</span>
+        </div>
+      </div>
+
+      <p class="since__since">
+        <span>Online Since</span><b>2016 / 09 / 10 00:00</b>
+      </p>
+
+      <p class="sr-only" data-since-sr aria-live="polite">微光摄影社运行时长度量</p>
+    </div>
+  </div>
+</section>
+
 <!-- ============================================================ 名字的由来 -->
 <section class="section" style="padding-top:clamp(30px,4vw,52px)">
   <div class="wrap">
@@ -232,5 +287,6 @@
 
 <script src="assets/data/works.js"></script>
 <script src="assets/js/site.js"></script>
+<script src="assets/js/since.js"></script>
 </body>
 </html>
