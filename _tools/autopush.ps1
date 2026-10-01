@@ -165,6 +165,61 @@ if (-not $git) {
 Write-Info "git: $git"
 
 # ---------------------------------------------------------------------------
+# 0.2 补全 git 的运行期依赖目录（PATH）
+#     PortableGit 把 git.exe 放在 <root>\cmd\（或 mingw64\bin\），但 HTTPS 远程
+#     访问组件 git-remote-https.exe 只在 <root>\mingw64\bin\。
+#     而它的 libexec\git-core 里并没有 remote helper（实测该目录只有 16 个
+#     shell 脚本），于是 git 只能退回到 PATH 去找 —— PATH 里没有 mingw64\bin
+#     时，一切本地操作都正常，一碰 https 远程就报：
+#         git: 'remote-https' is not a git command.
+#         fatal: remote helper 'https' aborted session
+#     表现出来就是「脚本跑了、提交也成功了，但推送静默失败」。
+#     Git Bash 之所以没事，是因为它启动时会把 /mingw64/bin 挂进 PATH；
+#     双击 .bat 拉起的 PowerShell 会话没有。这里自己补齐，别依赖外部环境。
+#     —— 2026-10-01 实测踩坑，别删。
+# ---------------------------------------------------------------------------
+function Add-GitRuntimeDirs {
+    param([string]$GitExe)
+
+    $start = Split-Path -Parent $GitExe
+    $dirs  = New-Object System.Collections.Generic.List[string]
+    $dirs.Add($start)
+
+    # 从 git.exe 所在目录逐级向上，凡是能拼出 mingw64\bin 的一律收进来。
+    # 覆盖两种布局：<root>\cmd\git.exe 与 <root>\mingw64\bin\git.exe。
+    $cur = $start
+    for ($i = 0; $i -lt 4; $i++) {
+        if (-not $cur) { break }
+        foreach ($sub in @("mingw64\bin", "mingw64\libexec\git-core", "usr\bin")) {
+            $p = Join-Path $cur $sub
+            if (Test-Path -LiteralPath $p) { $dirs.Add($p) }
+        }
+        $cur = Split-Path -Parent $cur
+    }
+
+    $added = @()
+    foreach ($d in ($dirs | Select-Object -Unique)) {
+        $existing = @($env:PATH -split ';' | Where-Object { $_ })
+        if ($existing -notcontains $d) {
+            $env:PATH = "$d;" + $env:PATH
+            $added += $d
+        }
+    }
+    if ($added.Count) { Add-Log ("  PATH 追加: " + ($added -join "; ")) }
+
+    # 自检：确认远程访问组件真的能被找到
+    $rh = Get-Command git-remote-https -ErrorAction SilentlyContinue
+    if ($rh) {
+        Write-Info "远程组件: $($rh.Source)"
+    } else {
+        Write-Warn2 "仍找不到 git-remote-https.exe —— 推送大概率会失败。"
+        Write-Info "已尝试追加目录：$($dirs -join '; ')"
+        Write-Info "可改用 Git Bash 版：./_tools/autopush.sh"
+    }
+}
+Add-GitRuntimeDirs -GitExe $git
+
+# ---------------------------------------------------------------------------
 # 0.5 凭据助手体检
 #     PortableGit 默认把 credential.helper 设成 "helper-selector" —— 一个
 #     GUI 选择器。它在非交互场景（脚本、CI、无桌面会话）下不弹窗、
@@ -422,8 +477,32 @@ Write-Host ""
 Write-Step "推送到 $Remote/$Branch"
 
 # 先探测远端分支是否存在，决定要不要 -u
-$probeRemote = (Invoke-Git -GitArgs @("ls-remote", "--exit-code", "--heads", $Remote, $Branch) -Quiet)
-$remoteBranchExists = ($probeRemote.Code -eq 0)
+# 注意：ls-remote 退出码非 0 **不等于** 分支不存在 —— 网络不通、凭据失败、
+# remote helper 缺失同样会非 0。所以「存在」必须同时满足两条：
+#   1) 退出码为 0
+#   2) 输出里真的出现了 refs/heads/<分支>
+# 否则宁可不加 -u（分支已存在时加 -u 本就无害，但误判会掩盖真正故障）。
+$probeRemote = Invoke-Git -GitArgs @("ls-remote", "--exit-code", "--heads", $Remote, $Branch) -Quiet
+$probeTxt    = ($probeRemote.Output -join "`n")
+$remoteBranchExists = ($probeRemote.Code -eq 0) -and
+                      ($probeTxt -match ("refs/heads/" + [regex]::Escape($Branch)))
+
+# 传输层故障要当场说清楚，否则会被误读成「远端没有这个分支」
+if (-not $remoteBranchExists) {
+    $transportErr = "is not a git command|remote helper|Could not resolve host|" +
+                    "unable to access|Failed to connect|timed out|" +
+                    "Authentication failed|could not read Username|Permission denied"
+    if ($probeTxt -match $transportErr) {
+        Write-Err "访问远程失败（这不是「分支不存在」的问题）："
+        Write-Info ($probeTxt.Trim())
+        if ($probeTxt -match "is not a git command|remote helper") {
+            Write-Info "这是 git 找不到远程访问组件 git-remote-https。"
+            Write-Info "多半是 PATH 里缺 PortableGit 的 mingw64\bin（本脚本已尝试自动补齐）。"
+            Write-Info "可改用 Git Bash 版：./_tools/autopush.sh"
+        }
+        exit $ExitPushFail
+    }
+}
 
 $pushArgs = @("push")
 if (-not $remoteBranchExists) {
