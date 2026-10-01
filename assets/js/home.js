@@ -121,8 +121,8 @@
     var groups = [
       { host: "#pick-campus",   ids: ["hanlou-06", "sports-02", "view-07", "hanlou-04", "sports-07", "view-11"] },
       { host: "#pick-field",    ids: ["sanjiang-01", "sanjiang-08", "sanjiang-03", "sanjiang-09", "sanjiang-17", "sanjiang-14"] },
-      { host: "#pick-city",     ids: ["city-01", "city-02", "city-05", "city-10"] },
-      { host: "#pick-portrait", ids: ["portrait-06", "portrait-15", "portrait-18", "portrait-05", "portrait-11", "portrait-13"] }
+      { host: "#pick-city",     ids: ["city-01", "city-05", "city-10"] },
+      { host: "#pick-portrait", ids: ["portrait-06", "portrait-15", "portrait-05", "portrait-11", "portrait-13"] }
     ];
 
     groups.forEach(function (g) {
