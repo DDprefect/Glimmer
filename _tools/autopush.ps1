@@ -164,6 +164,36 @@ if (-not $git) {
 }
 Write-Info "git: $git"
 
+# ---------------------------------------------------------------------------
+# 0.5 凭据助手体检
+#     PortableGit 默认把 credential.helper 设成 "helper-selector" —— 一个
+#     GUI 选择器。它在非交互场景（脚本、CI、无桌面会话）下不弹窗、
+#     直接失败，报 "could not read Username ... terminal prompts disabled"，
+#     看起来就像「脚本跑了但什么都没发生」。
+#     这里检测到 helper-selector 就自动切到 manager（GCM），能正常弹窗登录。
+#     —— 2026-10-01 实测踩坑，别改回去。
+#
+#     注意：必须用「最先生效的那一个」来判断，而不是 --get-all。
+#     git 会按 系统级(etc/gitconfig) → 全局(~/.gitconfig) → 仓库级
+#     依次取值，**第一个非空值才算数**。但 --get-all 会把所有层级
+#     都列出来，于是「系统级 helper-selector + 全局 manager」也会
+#     被误判成「还在用 helper-selector」。
+# ---------------------------------------------------------------------------
+$helperEffective = ((& $git config --get credential.helper 2>$null) -join "").Trim()
+if ($helperEffective -match "helper-selector") {
+    Write-Warn2 "检测到 credential.helper 生效值是 helper-selector（PortableGit 的 GUI 选择器）。"
+    Write-Info "它在脚本/无桌面环境下不弹窗会直接失败。自动切换为 manager（GCM）……"
+    & $git config --global credential.helper manager 2>$null | Out-Null
+    $nowEff = ((& $git config --get credential.helper 2>$null) -join "").Trim()
+    if ($nowEff -match "helper-selector") {
+        Write-Warn2 "自动切换未生效。若推送失败，请手动执行："
+        Write-Info "  git config --global credential.helper manager"
+        Write-Info "  git-credential-manager github login"
+    } else {
+        Write-Ok "已切换为 manager。首次推送会弹出 GitHub 登录窗，登录一次即可。"
+    }
+}
+
 # 统一的 git 调用封装：捕获输出与退出码，同时把命令本身写进日志（便于排查）
 #   PS 5.1 用 ANSI 解码外部命令输出，中文路径会变成乱码，所以把每行按
 #   Latin-1 → UTF-8 还原一遍（仅当该行确实不是合法 UTF-8 时才动手）。
@@ -430,11 +460,24 @@ if ($err -match "does not match any|does not appear to be a git repository|Could
 
 if ($err -match "Authentication failed|Permission denied|403|401|could not read Username|terminal prompts disabled|repository not found") {
     Write-Info "原因：认证失败或没有该仓库的推送权限。"
-    Write-Info "常见处理："
-    Write-Info "  1) 确认账号对 $remoteUrl 有写权限；"
-    Write-Info "  2) HTTPS 方式：让 Git Credential Manager 重新弹窗登录——"
-    Write-Info "     先执行 git credential-manager github login，或删掉旧凭据后重试；"
-    Write-Info "  3) SSH 方式：确认已把公钥加到 GitHub，且 ssh -T git@github.com 可通。"
+    if ($err -match "could not read Username|terminal prompts disabled") {
+        Write-Info ""
+        Write-Info "  这多半是「凭据助手没取到凭据」。按顺序排查："
+        Write-Info "  1) 看当前助手是什么：git config --get-all credential.helper"
+        Write-Info "     若含 helper-selector，换成 manager："
+        Write-Info "       git config --global credential.helper manager"
+        Write-Info "  2) 主动登录一次（会弹浏览器授权窗）："
+        Write-Info "       git-credential-manager github login"
+        Write-Info "     注意：双击 .bat 时窗口一闪而过看不到提示，"
+        Write-Info "     请改用「在 _tools 目录右键 → Open in Terminal」再运行。"
+        Write-Info "  3) 确认凭据已就绪后重跑本脚本。"
+    } else {
+        Write-Info "常见处理："
+        Write-Info "  1) 确认账号对 $remoteUrl 有写权限；"
+        Write-Info "  2) HTTPS 方式：让 Git Credential Manager 重新弹窗登录——"
+        Write-Info "     先执行 git-credential-manager github login，或删掉旧凭据后重试；"
+        Write-Info "  3) SSH 方式：确认已把公钥加到 GitHub，且 ssh -T git@github.com 可通。"
+    }
     exit $ExitNoPerm
 }
 
