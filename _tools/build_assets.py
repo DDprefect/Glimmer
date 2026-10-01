@@ -54,9 +54,9 @@ WORKS = [
     # ——— 校外采风 · 玉武三江
     ("sanjiang-01", s("校外活动", "玉武三江研学", "IMG_20260328_120436_0_2026-08-19_12-03-07_939 (复制).jpg"),   "field", "玉武三江", "侗寨风雨桥", "竖"),
     ("sanjiang-02", s("校外活动", "玉武三江研学", "IMG_20260328_121233_1_2026-08-19_12-03-07_972 (复制).jpg"),   "field", "玉武三江", "寨中巷道", "竖"),
-    ("sanjiang-03", s("校外活动", "玉武三江研学", "IMG_20260328_121420_2_2026-08-19_12-03-07_997 (复制).jpg"),   "field", "玉武三江", "市集红蛋", None),
+    ("sanjiang-03", s("校外活动", "玉武三江研学", "IMG_20260328_121420_2_2026-08-19_12-03-07_997 (复制).jpg"),   "field", "玉武三江", "集市茶香", None),
     ("sanjiang-04", s("校外活动", "玉武三江研学", "IMG_20260329_100244_3_2026-08-19_12-03-08_021 (复制).jpg"),   "field", "玉武三江", "远山云雾", None),
-    ("sanjiang-05", s("校外活动", "玉武三江研学", "IMG_20260329_101507_4_2026-08-19_12-03-08_047 (复制).jpg"),   "field", "玉武三江", "红竹笼", None),
+    ("sanjiang-05", s("校外活动", "玉武三江研学", "IMG_20260329_101507_4_2026-08-19_12-03-08_047 (复制).jpg"),   "field", "玉武三江", "茶罐 · 一味三江", None),
     ("sanjiang-06", s("校外活动", "玉武三江研学", "IMG_20260329_111831_5_2026-08-19_12-03-08_066 (复制).jpg"),   "field", "玉武三江", "春白花", "竖"),
     ("sanjiang-07", s("校外活动", "玉武三江研学", "IMG_9633 (复制).JPG"),  "field", "玉武三江", "寨中石板路", None),
     ("sanjiang-08", s("校外活动", "玉武三江研学", "IMG_9655 (复制).JPG"),  "field", "玉武三江", "采茶的少年", None),
@@ -71,7 +71,7 @@ WORKS = [
     ("sanjiang-17", s("校外活动", "玉武三江研学", "IMG_9882 (复制).JPG"),  "field", "玉武三江", "苗家阿婆", None),
     ("sanjiang-18", s("下载", "20.JPG"),                            "field", "玉武三江", "寨落全景", "竖"),
     # ——— 城市与远方
-    ("city-01", s("下载", "13.jpg"),                 "city", "城市与远方", "柳江落日 · 群峰剪影", None),
+    ("city-01", s("下载", "13.jpg"),                 "city", "城市与远方", "龙江河", None),
     ("city-02", s("下载", "IMG_0117.JPG"),           "city", "城市与远方", "城市黄昏", None),
     ("city-03", s("下载", "IMG_2690.jpg"),           "city", "城市与远方", "天际线", None),
     ("city-04", s("下载", "IMG_3333.jpg"),           "city", "城市与远方", "黄昏大树", "竖"),
@@ -79,7 +79,7 @@ WORKS = [
     ("city-06", s("下载", "9.jpg"),                  "city", "城市与远方", "蓝天白云", None),
     ("city-07", s("下载", "15.JPG"),                 "city", "城市与远方", "山间人家", None),
     ("city-08", s("下载", "5.png"),                  "city", "城市与远方", "街巷暖阳", None),
-    ("city-09", s("下载", "16.jpg"),                 "city", "城市与远方", "雕塑光影", None),
+    ("city-09", s("下载", "16.jpg"),                 "city", "城市与远方", "校有萌猫", None),
     ("city-10", s("下载", "mmexport1786551223813.jpg"), "city", "城市与远方", "光绘 · 跳动的光", "竖"),
     # ——— 人像与视觉
     ("portrait-01", s("招新", "6BE81A7D132BECCEA073F250DCEB20CE.png"), "portrait", "人像与视觉", "点点微光 · 汇入星河", "竖"),
@@ -106,6 +106,10 @@ WORKS = [
     ("portrait-20", u("人像", "Image_75229115051868 (复制).jpg"),       "portrait", "人像与视觉", "绿意 · 白裙",     "竖"),
     ("portrait-21", u("人像", "Image_1751474192473 (复制).jpg"),        "portrait", "人像与视觉", "逆光 · 凝视",     "横"),
 ]
+
+# 与 assets/data/works.js 保持一致：这些作品已下架（隐藏但保留数据与图片）。
+# 重跑本脚本重新生成 works.js 时务必带上，否则会丢失 hidden 状态。
+HIDDEN = {"view-04", "city-02", "city-06", "portrait-18"}
 
 # ---------------------------------------------------------------- 首页大图
 HEROES = [
@@ -242,7 +246,7 @@ for slug, src, cat, group, title, orient in WORKS:
     big = fit(im.convert("RGB"), 1800)
     save_webp(big, os.path.join(OUT, "works", slug + ".webp"), 84)
     save_webp(fit(im.convert("RGB"), 880), os.path.join(OUT, "works", slug + "-t.webp"), 78)
-    manifest.append({
+    entry = {
         "id": slug, "cat": cat, "group": group, "title": title,
         "src": f"assets/img/works/{slug}.webp",
         "thumb": f"assets/img/works/{slug}-t.webp",
@@ -250,7 +254,10 @@ for slug, src, cat, group, title, orient in WORKS:
         "ratio": round(w / h, 3),
         "portrait": (h > w),
         "shot": exif_shot(im),
-    })
+    }
+    if slug in HIDDEN:
+        entry["hidden"] = True
+    manifest.append(entry)
 
 for slug, src, longest in HEROES:
     if not os.path.exists(src):
