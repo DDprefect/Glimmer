@@ -21,7 +21,7 @@
   var SLIDES = [
     { src: "assets/img/hero/hero-campus.webp",  place: "校园 · 雕塑广场",   note: "晨光落在不锈钢雕塑上" },
     { src: "assets/img/hero/hero-night.webp",   place: "2026 凤麒喊楼",     note: "高三喊楼的夜" },
-    { src: "assets/img/hero/hero-city.webp",    place: "柳州 · 日落",       note: "黄金时刻的群峰" },
+    { src: "assets/img/hero/hero-city.webp",    place: "日落·龙江河之上",   note: "黄金时刻的群峰" },
     { src: "assets/img/hero/hero-sports.webp",  place: "春季运动会",        note: "百米冲刺的瞬间" },
     { src: "assets/img/hero/hero-field.webp",   place: "玉武三江 · 采风",   note: "风雨桥上的迎宾队伍" }
   ];
