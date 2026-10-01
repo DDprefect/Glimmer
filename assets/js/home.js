@@ -115,7 +115,7 @@
 
   /* ------------------------------------------------ 精选作品 */
   function renderSections() {
-    var all = window.WORKS || [];
+    var all = (G.visibleWorks ? G.visibleWorks() : (window.WORKS || []));
     if (!all.length) return;
 
     var groups = [

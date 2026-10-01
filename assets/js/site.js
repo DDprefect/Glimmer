@@ -475,7 +475,15 @@
     });
   }
 
-  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, SHOT: SHOT };
+  /* ---------------------------------------------------------- 可见作品
+     条目数据里带 hidden:true 的表示「已下架但保留数据」——
+     图片与条目都还在，只是不再出现在任何列表 / 灯箱 / 分类计数里。
+     加图、撤图都只改 works.js，不用碰各处渲染逻辑。 */
+  function visibleWorks() {
+    return (window.WORKS || []).filter(function (w) { return !w.hidden; });
+  }
+
+  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT };
 
   /* 动态渲染出来的图片：调试/截图模式下立即加载，避免懒加载留白 */
   function eagerAll(root) {

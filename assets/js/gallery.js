@@ -23,7 +23,7 @@
   var state = { cat: "all", shown: PER_PAGE, items: [] };
 
   function boot() {
-    var all = window.WORKS || [];
+    var all = (G.visibleWorks ? G.visibleWorks() : (window.WORKS || []));
     if (!all.length) return;
 
     var grid = $("#works-grid");
@@ -34,10 +34,17 @@
     /* ---------------- 筛选按钮 ---------------- */
     if (filterHost) {
       filterHost.innerHTML = CATS.map(function (c) {
-        var n = c.key === "all" ? all.length : all.filter(function (w) { return w.cat === c.key; }).length;
+        var n = c.key === "all"
+          ? all.length
+          : all.filter(function (w) { return w.cat === c.key; }).length;
         return '<button class="filter' + (c.key === "all" ? " is-on" : "") + '" type="button" data-cat="' + c.key + '">' +
                  c.label + " <b>" + n + "</b></button>";
       }).join("");
+
+      /* 页头统计的「本期展出」跟随实际可见作品数，
+         避免下架条目后计数与列表对不上（HTML 里的初始值只是静态兜底） */
+      var statEl = $("[data-count-works]");
+      if (statEl) statEl.setAttribute("data-count", all.length);
       $$(".filter", filterHost).forEach(function (b) {
         b.addEventListener("click", function () {
           $$(".filter", filterHost).forEach(function (x) { x.classList.remove("is-on"); });
