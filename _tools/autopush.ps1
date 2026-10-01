@@ -197,8 +197,11 @@ function Add-GitRuntimeDirs {
         $cur = Split-Path -Parent $cur
     }
 
+    $dirs = @($dirs | Select-Object -Unique)
+
+    # 1) 补 PATH（对 credential helper 之类的外部程序有帮助）
     $added = @()
-    foreach ($d in ($dirs | Select-Object -Unique)) {
+    foreach ($d in $dirs) {
         $existing = @($env:PATH -split ';' | Where-Object { $_ })
         if ($existing -notcontains $d) {
             $env:PATH = "$d;" + $env:PATH
@@ -207,13 +210,41 @@ function Add-GitRuntimeDirs {
     }
     if ($added.Count) { Add-Log ("  PATH 追加: " + ($added -join "; ")) }
 
-    # 自检：确认远程访问组件真的能被找到
-    $rh = Get-Command git-remote-https -ErrorAction SilentlyContinue
-    if ($rh) {
-        Write-Info "远程组件: $($rh.Source)"
+    # 2) 关键一步：把 GIT_EXEC_PATH 指到「真的有 remote helper 的那个目录」
+    #    Git for Windows 查找 remote helper 的顺序是 exec-path 优先、PATH 兜底。
+    #    本机 PortableGit 的 libexec\git-core 里**没有** git-remote-https.exe
+    #    （实测只有 16 个 shell 脚本），所以必须显式改 exec-path。
+    #    实测（2026-10-01，干净对照）：
+    #      PATH 不含 mingw64\bin           -> fatal: unable to find remote helper
+    #      GIT_EXEC_PATH=...\mingw64\bin   -> 正常访问远程
+    #    注意：补 PATH 在 PowerShell 里**不生效**（中文路径经环境块传递后 git
+    #    解析不到，实测 GIT_EXEC_PATH 用 MSYS 风格 "/mingw64/bin" 同样失败），
+    #    只有传 Windows 格式路径才稳。
+    $execPath = ((& $GitExe --exec-path 2>$null) | Out-String).Trim()
+    $helperInExec = $false
+    if ($execPath) {
+        $helperInExec = Test-Path -LiteralPath (Join-Path $execPath "git-remote-https.exe")
+    }
+    if (-not $helperInExec) {
+        foreach ($d in $dirs) {
+            if (Test-Path -LiteralPath (Join-Path $d "git-remote-https.exe")) {
+                $env:GIT_EXEC_PATH = $d
+                Write-Info "远程组件目录: $d（已设为 GIT_EXEC_PATH）"
+                Add-Log "  GIT_EXEC_PATH = $d"
+                break
+            }
+        }
+    }
+
+    # 3) 自检：确认 helper 确实落进了 exec-path，且 git 本身没被改坏
+    $newExec = ((& $GitExe --exec-path 2>$null) | Out-String).Trim()
+    $ok = $false
+    if ($newExec) { $ok = Test-Path -LiteralPath (Join-Path $newExec "git-remote-https.exe") }
+    if ($ok) {
+        Write-Info "远程访问组件就绪（exec-path: $newExec）"
     } else {
-        Write-Warn2 "仍找不到 git-remote-https.exe —— 推送大概率会失败。"
-        Write-Info "已尝试追加目录：$($dirs -join '; ')"
+        Write-Warn2 "git 仍可能找不到远程访问组件，推送大概率失败。"
+        Write-Info "已尝试目录：$($dirs -join '; ')"
         Write-Info "可改用 Git Bash 版：./_tools/autopush.sh"
     }
 }
