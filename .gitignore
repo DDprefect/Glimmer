@@ -4,6 +4,9 @@
 # 工作区与记忆文件
 .workbuddy/
 
+# slidep（PPT 工具）在本目录跑过留下的会话缓存，与站点无关
+.slidep/
+
 # 构建过程产生的中间数据
 _tools/dims.txt
 _tools/contact_sheet.py
