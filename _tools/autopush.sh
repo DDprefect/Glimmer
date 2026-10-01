@@ -77,6 +77,24 @@ else
 fi
 info "git: $GIT"
 
+# ---- 确保能找到 HTTPS 远程 helper（git-remote-https） ----
+# 便携版 git 的默认 exec-path（libexec/git-core）只有 shell 脚本，没有
+# git-remote-https.exe（它在 mingw64/bin）。缺它会让 `git push` 静默挂死。
+# 若默认 exec-path 没有、但 git 同目录有，则用 Windows 路径显式指定
+# GIT_EXEC_PATH —— 中文路径必须走 Windows 格式，PATH 回退会在 CJK 目录处坏掉。
+if [ -z "${GIT_EXEC_PATH:-}" ]; then
+  _gep="$("$GIT" --exec-path 2>/dev/null)"
+  if [ -n "$_gep" ] && ! ls "$_gep"/git-remote-https* >/dev/null 2>&1; then
+    _gdir="$(cd "$(dirname "$GIT")" && pwd)"
+    if ls "$_gdir"/git-remote-https* >/dev/null 2>&1; then
+      _gep_win="$(cygpath -w "$_gdir" 2>/dev/null)"
+      [ -z "$_gep_win" ] && _gep_win="$_gdir"
+      export GIT_EXEC_PATH="$_gep_win"
+      info "GIT_EXEC_PATH 设为: $GIT_EXEC_PATH（默认 exec-path 缺 git-remote-https）"
+    fi
+  fi
+fi
+
 # 统一的 git 调用封装：失败时保留输出供分类
 git_run() { _log "  \$ git $*"; "$GIT" "$@" 2>&1; }
 
@@ -130,10 +148,20 @@ STATUS="$(git_run status --porcelain)"
 if [ -z "$STATUS" ]; then
   ok "工作区干净，没有需要提交的变更。"
   AHEAD="$(git_run rev-list --count "$REMOTE/$BRANCH..HEAD" 2>/dev/null | tr -d '\r\n')"
-  case "$AHEAD" in ''|*[!0-9]*) ;; *) [ "$AHEAD" -gt 0 ] && {
-      warn "不过本地领先 $REMOTE/$BRANCH $AHEAD 个提交尚未推送。"
-      info "如需只推送这些提交：git push $REMOTE $BRANCH"; } ;;
-  esac
+  case "$AHEAD" in ''|*[!0-9]*) AHEAD=0 ;; esac
+  if [ "$AHEAD" -gt 0 ]; then
+    echo
+    step "检测到本地领先 $REMOTE/$BRANCH $AHEAD 个提交，自动补推"
+    PUSH_ARGS=(push "$REMOTE" "$BRANCH")
+    if OUT="$(GIT_CONFIG_NOSYSTEM=1 git_run "${PUSH_ARGS[@]}")"; then
+      ok "推送成功：$REMOTE/$BRANCH"
+    else
+      err "推送失败。"
+      printf '%s\n' "$OUT" | while IFS= read -r l; do [ -n "$l" ] && info "$l"; done
+      info "可手动重试：GIT_CONFIG_NOSYSTEM=1 git push $REMOTE $BRANCH"
+      exit $EXIT_PUSH
+    fi
+  fi
   exit $EXIT_OK
 fi
 info "检测到以下变更："
@@ -196,13 +224,13 @@ ok "已提交 $(git_run rev-parse --short HEAD | tr -d '\r\n')"
 echo
 step "推送到 $REMOTE/$BRANCH"
 PUSH_ARGS=(push)
-if ! git_run ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
+if ! GIT_CONFIG_NOSYSTEM=1 git_run ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
   PUSH_ARGS+=(-u)
   info "远端尚无 '$BRANCH' 分支，将新建并建立跟踪关系（-u）。"
 fi
 PUSH_ARGS+=("$REMOTE" "$BRANCH")
 
-if OUT="$(git_run "${PUSH_ARGS[@]}")"; then
+if OUT="$(GIT_CONFIG_NOSYSTEM=1 git_run "${PUSH_ARGS[@]}")"; then
   ok "推送成功：$REMOTE/$BRANCH"
   exit $EXIT_OK
 fi
