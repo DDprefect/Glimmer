@@ -265,19 +265,29 @@ Add-GitRuntimeDirs -GitExe $git
 #     都列出来，于是「系统级 helper-selector + 全局 manager」也会
 #     被误判成「还在用 helper-selector」。
 # ---------------------------------------------------------------------------
-$helperEffective = ((& $git config --get credential.helper 2>$null) -join "").Trim()
-if ($helperEffective -match "helper-selector") {
-    Write-Warn2 "检测到 credential.helper 生效值是 helper-selector（PortableGit 的 GUI 选择器）。"
-    Write-Info "它在脚本/无桌面环境下不弹窗会直接失败。自动切换为 manager（GCM）……"
-    & $git config --global credential.helper manager 2>$null | Out-Null
-    $nowEff = ((& $git config --get credential.helper 2>$null) -join "").Trim()
-    if ($nowEff -match "helper-selector") {
-        Write-Warn2 "自动切换未生效。若推送失败，请手动执行："
-        Write-Info "  git config --global credential.helper manager"
-        Write-Info "  git-credential-manager github login"
-    } else {
-        Write-Ok "已切换为 manager。首次推送会弹出 GitHub 登录窗，登录一次即可。"
+#     重要：credential.helper 是**多值键**，git 会依次调用所有层级配置的值，
+#     系统级(etc/gitconfig)的 helper-selector 排在全局的 manager **前面**。
+#     于是即便全局已设成 manager，远程操作仍会先去调 helper-selector：
+#     它在无桌面会话下不弹窗、直接失败，表现为 push **没有任何输出**、
+#     退出码 128（GIT_TRACE 会看到 run_command: 'git credential-helper-selector get'）。
+#     所以这里必须用 --get-all（所有层级）来判断，只看生效值会漏掉它。
+#     —— 2026-10-01 实测，别改回 --get。
+$helperAll = ((& $git config --get-all credential.helper 2>$null) -join " ").Trim()
+$script:NoSystemCfg = $false
+
+if ($helperAll -match "helper-selector") {
+    Write-Warn2 "检测到 credential.helper 含 helper-selector（PortableGit 系统级 GUI 选择器）。"
+    Write-Info "它排在 manager 前面，在脚本/无桌面环境下不弹窗会直接失败。"
+
+    # 全局兜底：确保 manager 已经配上（用户可能还没设过）
+    if ($helperAll -notmatch "manager") {
+        & $git config --global credential.helper manager 2>$null | Out-Null
+        Write-Info "已设置全局 credential.helper = manager（GCM）。"
     }
+
+    # 对策：涉及网络的 git 命令改为忽略系统级配置，让 manager 成为唯一 helper
+    $script:NoSystemCfg = $true
+    Write-Ok "已启用对策：访问远程的命令将忽略系统级配置（GIT_CONFIG_NOSYSTEM=1），本地 add/commit 行为不变。"
 }
 
 # 统一的 git 调用封装：捕获输出与退出码，同时把命令本身写进日志（便于排查）
@@ -302,13 +312,19 @@ function Invoke-Git {
         #   Invoke-Git -GitArgs @("-c","x","y")     （数组，用于以 - 开头的 git 选项）
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]]$GitArgs,
-        [switch]$Quiet       # 静默：不把 stdout 打到控制台
+        [switch]$Quiet,      # 静默：不把 stdout 打到控制台
+        [switch]$Remote      # 涉及网络：临时忽略系统级 gitconfig
+                             # （绕开 PortableGit 的 helper-selector，见 0.5 段）
     )
-    Add-Log ("  `$ git " + ($GitArgs -join " "))
+    $nosysTag = ""
+    if ($Remote -and $script:NoSystemCfg) { $nosysTag = " [GIT_CONFIG_NOSYSTEM=1]" }
+    Add-Log ("  `$ git " + ($GitArgs -join " ") + $nosysTag)
     # git 会把 warning（例如 LF/CRLF 提示）写到 stderr。在 $ErrorActionPreference="Stop"
     # 下，2>&1 合并进来的这些行会被 PowerShell 当成 ErrorRecord 并升级为终止错误，
     # 于是脚本在「只是有个 warning」的情况下直接退出。这里临时切到 Continue，
     # 把输出当纯文本收下来，判定成功与否只看退出码。
+    $prevNoSys = $env:GIT_CONFIG_NOSYSTEM
+    if ($Remote -and $script:NoSystemCfg) { $env:GIT_CONFIG_NOSYSTEM = "1" }
     $prevEA = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
@@ -316,6 +332,10 @@ function Invoke-Git {
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $prevEA
+        if ($Remote -and $script:NoSystemCfg) {
+            if ($prevNoSys) { $env:GIT_CONFIG_NOSYSTEM = $prevNoSys }
+            else { Remove-Item Env:\GIT_CONFIG_NOSYSTEM -ErrorAction SilentlyContinue }
+        }
     }
     Add-Log ("  -> exit " + $code)
     $out = @($raw | ForEach-Object { Repair-Encoding($_.ToString()) })
@@ -513,7 +533,7 @@ Write-Step "推送到 $Remote/$Branch"
 #   1) 退出码为 0
 #   2) 输出里真的出现了 refs/heads/<分支>
 # 否则宁可不加 -u（分支已存在时加 -u 本就无害，但误判会掩盖真正故障）。
-$probeRemote = Invoke-Git -GitArgs @("ls-remote", "--exit-code", "--heads", $Remote, $Branch) -Quiet
+$probeRemote = Invoke-Git -GitArgs @("ls-remote", "--exit-code", "--heads", $Remote, $Branch) -Quiet -Remote
 $probeTxt    = ($probeRemote.Output -join "`n")
 $remoteBranchExists = ($probeRemote.Code -eq 0) -and
                       ($probeTxt -match ("refs/heads/" + [regex]::Escape($Branch)))
@@ -542,7 +562,7 @@ if (-not $remoteBranchExists) {
 }
 $pushArgs += @($Remote, $Branch)
 
-$p = Invoke-Git -GitArgs $pushArgs
+$p = Invoke-Git -GitArgs $pushArgs -Remote
 if ($p.Code -eq 0) {
     Write-Ok "推送成功：$Remote/$Branch"
     exit $ExitOK
