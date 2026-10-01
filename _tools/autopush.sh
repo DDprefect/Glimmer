@@ -22,13 +22,16 @@ BRANCH="${GIT_BRANCH:-}"
 DRY=0
 PATHS=()
 
+# 同时接受两套写法：本脚本的短选项（-m/-r/-b/-n/-h）与 autopush.ps1 的长选项
+# （-Message/-Remote/-Branch/-DryRun/-Help）。这样 autopush.bat 可以把参数
+# 原样透传给本脚本，不必在 bat 里做选项名转换。
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m|--message) MSG="$2"; shift 2 ;;
-    -r|--remote)  REMOTE="$2"; shift 2 ;;
-    -b|--branch)  BRANCH="$2"; shift 2 ;;
-    -n|--dry-run) DRY=1; shift ;;
-    -h|--help)    sed -n '2,16p' "$0"; exit $EXIT_OK ;;
+    -m|--message|-Message) MSG="$2"; shift 2 ;;
+    -r|--remote|-Remote)   REMOTE="$2"; shift 2 ;;
+    -b|--branch|-Branch)   BRANCH="$2"; shift 2 ;;
+    -n|--dry-run|-DryRun)  DRY=1; shift ;;
+    -h|--help|-Help)       sed -n '2,16p' "$0"; exit $EXIT_OK ;;
     --) shift; while [ $# -gt 0 ]; do PATHS+=("$1"); shift; done ;;
     -*) echo "[错误] 未知参数：$1" >&2; exit $EXIT_BADARGS ;;
     *)  PATHS+=("$1"); shift ;;
@@ -43,6 +46,21 @@ ok()   { echo -e "\033[32m[完成] $1\033[0m"; _log "[完成] $1"; }
 warn() { echo -e "\033[33m[注意] $1\033[0m"; _log "[注意] $1"; }
 err()  { echo -e "\033[31m[错误] $1\033[0m"; _log "[错误] $1"; }
 info() { echo -e "\033[90m       $1\033[0m"; _log "       $1"; }
+
+# ---- 补全 PATH：非交互启动时可能缺 MSYS 系统目录与 mingw64/bin ----
+#   从 PowerShell/cmd 直接调 `bash.exe script.sh` 属于非登录、非交互 shell，
+#   不会读 /etc/profile，于是 PATH 里既没有 /usr/bin（tr、grep、sed 等
+#   coreutils）也没有 /mingw64/bin（git），脚本会半路炸在
+#   "tr: command not found"。这里用 MSYS 的内部路径直接补齐 —— 它们是 bash
+#   自己认的虚拟路径，不经过 Windows 路径转换，含中文的安装目录也不会坏。
+#   —— 2026-10-01 实测踩坑，别删。
+for _d in /mingw64/bin /usr/bin /bin; do
+  case ":$PATH:" in
+    *":$_d:"*) ;;
+    *) [ -d "$_d" ] && PATH="$_d:$PATH" ;;
+  esac
+done
+export PATH
 
 # ---- 定位 git（Windows 便携版不在 PATH 的情况） ----
 if [ -n "${GIT_EXE:-}" ] && [ -x "$GIT_EXE" ]; then
