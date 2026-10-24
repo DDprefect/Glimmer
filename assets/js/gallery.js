@@ -167,10 +167,14 @@
       var k = (location.hash || "").replace("#", "");
       if (!k) return;
 
-      /* 作品深链 #photo-<id>（首页「最新收录」点进来）：定位卡片并开灯箱 */
-      var pm = /^photo-(\d+)$/.exec(k);
+      /* 作品深链 #photo-<id>（首页「最新收录」、灯箱「复制本张链接」点进来）：
+         定位卡片并开灯箱。数据库作品 id 形如 db-123，静态作品形如 hanlou-01，
+         两种都认——同学把自己的作品甩进 QQ 群时点开就是那一张。 */
+      var pm = /^photo-(.+)$/.exec(k);
       if (pm) {
-        var hit = all.filter(function (w) { return w.db && String(w.id) === "db-" + pm[1]; })[0];
+        var hit = all.filter(function (w) {
+          return String(w.id) === pm[1] || String(w.id) === "db-" + pm[1];
+        })[0];
         if (!hit) return;
         state.cat = "all";
         state.shown = Math.max(PER_PAGE, all.indexOf(hit) + 1);

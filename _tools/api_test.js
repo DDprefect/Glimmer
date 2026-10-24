@@ -116,12 +116,17 @@ function startMockSupabase() {
       { id: 3, category: "城市与远方", title: "老图·城市", author: "丙", shot_date: "2025-12-31", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/城市与远方/3.jpg", status: "approved", created_at: "2025-12-31T00:00:00Z" }
     ],
     submissions: [
-      { id: 1, name: '含"引号",同学', class: "高二3班", contact: "QQ 12345", interest: "人像、后期", intro: "喜欢拍\n换行的", created_at: "2026-01-05T00:00:00Z" }
+      { id: 1, name: '含"引号",同学', class: "高二3班", contact: "QQ 12345", interest: "人像、后期", intro: "喜欢拍\n换行的", created_at: "2026-01-05T00:00:00Z" },
+      /* 报名状态查询用例：一条还没联系、一条已联系 */
+      { id: 2, name: "丁", class: "高一7班", contact: "QQ 88888", interest: "校园纪实", intro: "想学构图", handled: false, created_at: "2026-02-01T10:00:00Z" },
+      { id: 3, name: "戊", class: "高二1班", contact: "13800138000", interest: "人像、后期", intro: "自带微单", handled: true, created_at: "2026-02-02T10:00:00Z" }
     ],
     nextPhoto: 4,
-    nextSub: 2,
+    nextSub: 4,
     sawServiceKey: false,
-    rejectExifCol: false
+    rejectExifCol: false,
+    /* 模拟旧库没有 handled 列：select 里含 handled 的查询一律 42703 */
+    rejectHandledCol: false
   };
 
   var server = http.createServer(function (req, res) {
@@ -153,6 +158,12 @@ function startMockSupabase() {
           if (mi) { if (mi[1].split(",").indexOf(String(row[k])) === -1) ok = false; return; }
           var mg = /^gte\.([\s\S]*)$/.exec(v);
           if (mg) { if (String(row[k] || "") < mg[1]) ok = false; }
+          /* ilike.*关键词*：PostgREST 的包含匹配，报名查询的兜底一次用 */
+          var ml = /^ilike\.([\s\S]*)$/.exec(v);
+          if (ml) {
+            var pat = ml[1].replace(/\*/g, "");
+            if (String(row[k] || "").toLowerCase().indexOf(pat.toLowerCase()) === -1) ok = false;
+          }
         });
         return ok;
       }
@@ -166,6 +177,11 @@ function startMockSupabase() {
       }
 
       if (req.method === "GET") {
+        /* 旧库没有 handled 列：select 含 handled 时报错，驱动接口降级重试 */
+        if (state.rejectHandledCol && (u.searchParams.get("select") || "").indexOf("handled") !== -1) {
+          state.rejectHandledCol = false;
+          return send(400, { code: "42703", message: "column submissions.handled does not exist" });
+        }
         var rows = table.filter(matches);
         if (u.searchParams.get("order") === "created_at.desc") {
           rows = rows.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; });
@@ -218,6 +234,7 @@ function startApiServer() {
     "/api/register": require(path.join(ROOT, "api/register.js")),
     "/api/admin": require(path.join(ROOT, "api/admin.js")),
     "/api/photo-status": require(path.join(ROOT, "api/photo-status.js")),
+    "/api/register-status": require(path.join(ROOT, "api/register-status.js")),
     "/api/keepalive": require(path.join(ROOT, "api/keepalive.js")),
     "/api/upload": require(path.join(ROOT, "api/upload.js")),
     "/api/backup": require(path.join(ROOT, "api/backup.js"))
@@ -384,8 +401,9 @@ async function testApi() {
   ok("admin 错密码 → 401", r.status === 401);
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
-  // pending = 种子 1 条 + 前面 POST 测试新入库 1 条；approved = 种子 2 条；offline = 0；submissions = 种子 1 + register 测试 1
-  ok("admin list → 200 四段数据", r.status === 200 && r.json.pending.length === 2 && r.json.approved.length === 2 && r.json.offline.length === 0 && r.json.submissions.length === 2,
+  // pending = 种子 1 条 + 前面 POST 测试新入库 1 条；approved = 种子 2 条；offline = 0
+  // submissions = 种子 3 条（含"引号"同学 + 丁 + 戊，后两条是报名自查用例）+ register 测试 1 条
+  ok("admin list → 200 四段数据", r.status === 200 && r.json.pending.length === 2 && r.json.approved.length === 2 && r.json.offline.length === 0 && r.json.submissions.length === 4,
      "pending=" + r.json.pending.length + " approved=" + r.json.approved.length + " offline=" + r.json.offline.length + " subs=" + r.json.submissions.length);
 
   var pendingId = r.json.pending[0].id;
@@ -595,6 +613,42 @@ async function testApi() {
   r = await call(P, "GET", "/api/backup", null, { Authorization: "Bearer cron-secret-123" });
   ok("Bearer 正确 → 200", r.status === 200 && r.json.ok && r.json.backup, "status=" + r.status);
   delete process.env.CRON_SECRET;
+
+  /* ---------- 报名状态自查（只回状态，不回任何个人信息） ---------- */
+  rl._buckets.clear();
+  r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
+  ok("报名自查：还没被联系 → 待联系", r.status === 200 && r.json.ok && r.json.found === true && r.json.status === "待联系", JSON.stringify(r.json));
+  ok("报名自查：不回联系方式等个人信息", r.json.contact === undefined && r.json.intro === undefined && r.json.class === undefined, JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/register-status", { name: "戊", contact: "13800138000" });
+  ok("报名自查：已被联系 → 已联系", r.status === 200 && r.json.found === true && r.json.status === "已联系", JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "88888" });
+  ok("报名自查：联系方式记不全也能含糊命中", r.status === 200 && r.json.found === true, JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/register-status", { name: "查无此人", contact: "00000" });
+  ok("报名自查：查无记录 → found=false", r.status === 200 && r.json.ok && r.json.found === false, JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "13800138000" });
+  ok("报名自查：姓名与联系方式不属同一人 → 查不到", r.status === 200 && r.json.found === false, JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/register-status", { name: "丁" });
+  ok("报名自查：缺联系方式 → 400", r.status === 400 && !r.json.ok, "status=" + r.status);
+
+  r = await call(P, "POST", "/api/register-status", { contact: "QQ 88888" });
+  ok("报名自查：缺姓名 → 400", r.status === 400 && !r.json.ok, "status=" + r.status);
+
+  /* 旧库没有 handled 列：不判断已联系/待联系，只说「已收到报名」，不能报错 */
+  mock.state.rejectHandledCol = true;
+  r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
+  ok("报名自查：旧库无 handled 列 → 降级为「已收到报名」", r.status === 200 && r.json.found === true && r.json.status === "已收到报名", JSON.stringify(r.json));
+
+  /* 限流：10 次/10 分钟，第 11 次挡下（上面已用掉 8 次配额） */
+  await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
+  await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
+  r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
+  ok("报名自查：第 11 次 → 429 限流", r.status === 429, "status=" + r.status);
+  rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */
   r = await call(P, "OPTIONS", "/api/photos");

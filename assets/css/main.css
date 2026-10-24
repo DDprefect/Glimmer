@@ -2417,3 +2417,198 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   border: none;
   white-space: normal;
 }
+
+/* ==========================================================================
+   招新状态条（首页顶部）——内容由 site.js 的 RECRUIT 配置驱动，
+   改配置即可切换「招新中 / 已结束 / 不显示」
+   ========================================================================== */
+.rbar {
+  position: relative;
+  z-index: 5;
+  background: var(--ink);
+  color: #fff;
+}
+.rbar--open { background: linear-gradient(100deg, #1A1613 0%, #33251D 100%); }
+.rbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.rbar__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  box-shadow: 0 0 0 3px rgba(217, 169, 78, .22);
+}
+.rbar--open .rbar__dot { animation: rbarPulse 1.9s ease-in-out infinite; }
+@keyframes rbarPulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(217, 169, 78, .30); }
+  50%      { box-shadow: 0 0 0 8px rgba(217, 169, 78, .04); }
+}
+.rbar__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rbar__txt b { font-family: var(--serif); font-weight: 600; font-size: .93rem; letter-spacing: .02em; }
+.rbar__txt em { font-style: normal; font-size: .76rem; color: rgba(255, 255, 255, .56); }
+.rbar__cta {
+  margin-left: auto;
+  flex: none;
+  font-size: .8rem;
+  color: var(--gold-soft);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(217, 169, 78, .38);
+  padding-bottom: 2px;
+  white-space: nowrap;
+  transition: color .3s var(--ease), border-color .3s var(--ease);
+}
+.rbar__cta:hover { color: #F2D7A0; border-bottom-color: #F2D7A0; }
+@media (max-width: 700px) {
+  .rbar__txt em { display: none; }
+  .rbar__txt b  { font-size: .84rem; }
+  .rbar__cta { font-size: .76rem; }
+}
+
+/* ==========================================================================
+   页脚「联系我们」账号卡——点击即复制，省得同学抄号码
+   ========================================================================== */
+.foot__acct { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; }
+.foot__copy {
+  display: block;
+  width: 100%;
+  max-width: 260px;
+  text-align: left;
+  padding: 9px 13px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, .04);
+  cursor: pointer;
+  transition: border-color .3s var(--ease), background .3s var(--ease);
+}
+.foot__copy:hover { border-color: rgba(255, 255, 255, .36); background: rgba(255, 255, 255, .08); }
+.foot__copy span {
+  display: block;
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  opacity: .52;
+}
+.foot__copy b {
+  display: block;
+  font-family: var(--mono);
+  font-size: .88rem;
+  font-weight: 500;
+  color: #fff;
+  margin-top: 3px;
+}
+.foot__copy i {
+  display: block;
+  font-style: normal;
+  font-size: .67rem;
+  opacity: .4;
+  margin-top: 2px;
+}
+.foot__copy.is-done { border-color: rgba(120, 190, 140, .7); background: rgba(120, 190, 140, .14); }
+
+/* ==========================================================================
+   灯箱「复制本张链接」——让同学把作品甩进 QQ 群，点开就是那一张
+   ========================================================================== */
+.lb__cap p { margin-right: auto; }
+.lb__copy {
+  flex: none;
+  align-self: center;
+  padding: 7px 15px;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 99px;
+  background: transparent;
+  font-size: .76rem;
+  color: rgba(255, 255, 255, .7);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .3s var(--ease), border-color .3s var(--ease);
+}
+.lb__copy:hover { color: var(--gold-soft); border-color: var(--gold-soft); }
+.lb__copy.is-done { color: #8FCFA1; border-color: #8FCFA1; }
+
+/* ==========================================================================
+   首页「近期动态」——手写卡片，让网站有「时间在流动」的感觉
+   ========================================================================== */
+.news {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.news__item {
+  padding: 26px 24px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  transition: transform .45s var(--ease-out), box-shadow .45s var(--ease-out);
+}
+.news__item:hover { transform: translateY(-4px); box-shadow: var(--sh-2); }
+.news__item .h3 { font-size: 1.06rem; margin: 13px 0 10px; }
+.news__item p { font-size: .84rem; line-height: 1.9; color: var(--ink-2); margin: 0; }
+.news__tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .16em;
+  padding: 4px 11px;
+  border-radius: 99px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+}
+.news__tag.is-live { background: rgba(176, 58, 34, .12); color: var(--red); }
+.news__date {
+  display: block;
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .1em;
+  color: var(--ink-3);
+  margin-top: 11px;
+}
+.news__more {
+  display: inline-block;
+  margin-top: 17px;
+  font-size: .8rem;
+  color: var(--red);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(176, 58, 34, .28);
+  padding-bottom: 2px;
+}
+.news__more:hover { border-bottom-color: var(--red); }
+.news__more span { display: inline-block; transition: transform .3s var(--ease); }
+.news__more:hover span { transform: translateX(3px); }
+@media (max-width: 900px) { .news { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .news { grid-template-columns: 1fr; } }
+
+/* ==========================================================================
+   作品集分类栏 + 常驻投稿入口
+   ========================================================================== */
+.gbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: clamp(26px, 3.4vw, 42px);
+}
+.gbar .filters { flex: 1 1 auto; margin-bottom: 0; }
+.gbar__submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  padding: 9px 17px;
+  border: 1px solid var(--line-strong);
+  border-radius: 99px;
+  font-size: .82rem;
+  text-decoration: none;
+  transition: background .3s var(--ease), border-color .3s var(--ease), color .3s var(--ease);
+}
+.gbar__submit:hover { background: var(--red); border-color: var(--red); color: #fff; }
+@media (max-width: 700px) {
+  .gbar__submit { width: 100%; justify-content: center; }
+}

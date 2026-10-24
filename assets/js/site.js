@@ -17,9 +17,28 @@
     { href: "index.html",   label: "首页",     en: "Home"  },
     { href: "gallery.html", label: "作品集",   en: "Works" },
     { href: "about.html",   label: "关于我们", en: "About" },
+    { href: "upload.html",  label: "投稿",     en: "Submit" },
     { href: "share.html",   label: "分享微光", en: "Share" },
     { href: "join.html",    label: "加入微光", en: "Join"  }
   ];
+
+  /* ---------------------------------------------------------- 招新状态条
+     首页顶部那条提示。改这里的配置即可切换「招新中 / 已结束 / 不显示」，
+     不用动页面结构——干部自己就能维护。
+       show  总开关：false 则整条不出现
+       open  true=招新中（引导去报名），false=已结束（引导加群等通知） */
+  var RECRUIT = {
+    show: true,
+    open: true,
+    openText: "2026 秋季招新进行中",
+    openNote: "不设门槛 · 不唯设备 · 不限基础",
+    openLink: "join.html#form",
+    openCta: "去填报名信息",
+    closeText: "本轮招新已结束",
+    closeNote: "下一轮预计在下学期初启动，先加官方 QQ 群等通知",
+    closeLink: "share.html",
+    closeCta: "去加官方 QQ 群"
+  };
 
   var $  = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -63,8 +82,11 @@
   function renderNav() {
     var page = currentPage();
     var onJoin = page === "join.html";
-    // 桌面导航跳过「加入微光」——它由右侧 CTA 按钮承担，避免出现两个同样的入口
-    var links = NAV.filter(function (n) { return n.href !== "join.html"; }).map(function (n) {
+    // 桌面导航跳过「加入微光」（由右侧 CTA 承担，避免两个同样入口）
+    // 与「分享微光」（放抽屉与页脚就够了，桌面主导航保持清爽；抽屉与页脚仍是全量）
+    var links = NAV.filter(function (n) {
+      return n.href !== "join.html" && n.href !== "share.html";
+    }).map(function (n) {
       return '<a class="nav__link' + (n.href === page ? " is-active" : "") +
              '" href="' + n.href + '">' + n.label + "</a>";
     }).join("");
@@ -164,8 +186,17 @@
             "<h4>联系我们</h4>" +
             '<div class="foot__links">' +
               '<a href="join.html">招新与报名</a>' +
-              '<span style="opacity:.6">抖音 · 官网 · 作品展示</span>' +
-              '<span style="opacity:.6">校内社团活动中心</span>' +
+              '<a href="upload.html">作品投稿</a>' +
+              '<a href="share.html">关注与分享</a>' +
+            "</div>" +
+            /* 账号可以直接点：复制比抄写靠谱，手机上也省事 */
+            '<div class="foot__acct">' +
+              '<button class="foot__copy" type="button" data-copy="1159554310">' +
+                "<span>官方 QQ</span><b>1159554310</b><i>点击复制</i>" +
+              "</button>" +
+              '<button class="foot__copy" type="button" data-copy="ltyz_GLIMMER">' +
+                "<span>官方抖音</span><b>ltyz_GLIMMER</b><i>点击复制</i>" +
+              "</button>" +
             "</div>" +
           "</div>" +
         "</div>" +
@@ -177,6 +208,66 @@
       "</div>";
     var host = $("[data-foot]");
     if (host) { host.replaceWith(el); } else { document.body.appendChild(el); }
+  }
+
+  /* ---------------------------------------------------------- 招新状态条
+     只有首页有 <div id="rbar"> 这个挂载点，其它页面自动跳过。
+     招新中：一条深色提示，点右边按钮直接滚到报名表单；
+     已结束：导流到官方 QQ 群，别让同学空手而归。 */
+  function renderRecruit() {
+    var el = $("#rbar");
+    if (!el || !RECRUIT.show) return;
+    var open = !!RECRUIT.open;
+    el.hidden = false;
+    el.className = "rbar" + (open ? " rbar--open" : " rbar--closed");
+    el.innerHTML =
+      '<div class="wrap rbar__inner">' +
+        '<span class="rbar__dot" aria-hidden="true"></span>' +
+        '<span class="rbar__txt"><b>' + esc(open ? RECRUIT.openText : RECRUIT.closeText) + "</b>" +
+          "<em>" + esc(open ? RECRUIT.openNote : RECRUIT.closeNote) + "</em></span>" +
+        '<a class="rbar__cta" href="' + (open ? RECRUIT.openLink : RECRUIT.closeLink) + '">' +
+          esc(open ? RECRUIT.openCta : RECRUIT.closeCta) + " →</a>" +
+      "</div>";
+  }
+
+  /* ---------------------------------------------------------- 复制文本
+     双击 index.html 走 file:// 时浏览器不是安全上下文，navigator.clipboard
+     可能不存在、也可能存在但 writeText 直接 reject。因此只在安全上下文且
+     API 可用时才用原生接口，任何失败都回落到 execCommand。
+     页脚「点击复制」、灯箱「复制本张链接」、分享按钮共用这一份。 */
+  function copyText(text) {
+    function legacy() {
+      return new Promise(function (resolve, reject) {
+        var ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.top = "-1000px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        var ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        ta.remove();
+        ok ? resolve() : reject();
+      });
+    }
+    if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacy(); });
+    }
+    return legacy();
+  }
+
+  /* 临时改文案做反馈：备份 innerHTML，避免把按钮里的图标弄丢 */
+  function flash(el, txt) {
+    if (!el.dataset.origHtml) el.dataset.origHtml = el.innerHTML;
+    el.innerHTML = txt;
+    el.classList.add("is-done");
+    setTimeout(function () {
+      el.innerHTML = el.dataset.origHtml;
+      el.classList.remove("is-done");
+    }, 1800);
   }
 
   /* ---------------------------------------------------------- 滚动入场 */
@@ -261,9 +352,21 @@
     update();
   }
 
+  /* ---------------------------------------------------------- 单作品深链
+     gallery.html#photo-<id>：数据库作品 id 形如 "db-123"，静态作品形如
+     "hanlou-01"，统一去掉 db- 前缀后拼到作品集地址上。
+     同学把自己的作品甩进 QQ 群，点开就直接放大那一张——这是全站唯一
+     一个「让同学帮社团拉新」的动作，所以灯箱里给了复制按钮。 */
+  function workLink(it) {
+    if (!it || !it.id) return "";
+    var base = location.href.split("#")[0].replace(/[^/]*$/, "");
+    return base + "gallery.html#photo-" + String(it.id).replace(/^db-/, "");
+  }
+  window.GlimmerWorkLink = workLink;
+
   /* ---------------------------------------------------------- 灯箱 */
   var LB = (function () {
-    var el, imgEl, capEl, countEl, exifEl, list = [], idx = 0;
+    var el, imgEl, capEl, countEl, exifEl, copyEl, list = [], idx = 0;
 
     function build() {
       el = document.createElement("div");
@@ -285,7 +388,9 @@
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 5l7 7-7 7"/></svg>' +
           "</button>" +
         "</div>" +
-        '<div class="lb__cap"><h3></h3><p></p></div>' +
+        '<div class="lb__cap"><h3></h3><p></p>' +
+          '<button class="lb__copy" type="button" hidden>复制本张链接</button>' +
+        "</div>" +
         '<div class="lb__exif"></div>';
 
       document.body.appendChild(el);
@@ -293,6 +398,17 @@
       capEl   = $(".lb__cap h3", el);
       countEl = $(".lb__count", el);
       exifEl  = $(".lb__exif", el);
+      copyEl  = $(".lb__copy", el);
+
+      /* 复制当前这张的深链。没有 id 的条目（理论上不会有）按钮不出现。 */
+      copyEl.addEventListener("click", function () {
+        var url = workLink(list[idx]);
+        if (!url) return;
+        copyText(url).then(
+          function () { flash(copyEl, "链接已复制 ✓"); },
+          function () { flash(copyEl, "复制失败，请手动复制地址栏"); }
+        );
+      });
 
       $(".lb__close", el).addEventListener("click", close);
       $(".lb__nav--prev", el).addEventListener("click", function () { go(-1); });
@@ -328,6 +444,7 @@
       $(".lb__cap p", el).textContent = it.sub || it.group || "";
       countEl.textContent = String(idx + 1).padStart(2, "0") + " / " + String(list.length).padStart(2, "0");
       if (exifEl) exifEl.innerHTML = exifLine(it.shot);
+      if (copyEl) copyEl.hidden = !workLink(it);
     }
 
     /* 拍摄信息行：机型 · 镜头 · 光圈 快门 ISO 焦段
@@ -539,44 +656,7 @@
     var meta = document.querySelector('meta[name="description"]');
     var desc = (meta && meta.getAttribute("content")) || SITE.slogan;
 
-    // 复制文本。注意：双击 index.html 走 file:// 时浏览器不是安全上下文，
-    // navigator.clipboard 可能不存在、也可能存在但 writeText 直接 reject。
-    // 因此只在「安全上下文」且 API 可用时才用原生接口，任何失败都回落到 execCommand。
-    function copyText(text) {
-      function legacy() {
-        return new Promise(function (resolve, reject) {
-          var ta = document.createElement("textarea");
-          ta.value = text;
-          ta.setAttribute("readonly", "");
-          ta.style.position = "fixed";
-          ta.style.top = "-1000px";
-          ta.style.opacity = "0";
-          document.body.appendChild(ta);
-          ta.select();
-          ta.setSelectionRange(0, text.length);
-          var ok = false;
-          try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
-          ta.remove();
-          ok ? resolve() : reject();
-        });
-      }
-      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text).catch(function () { return legacy(); });
-      }
-      return legacy();
-    }
-
-    // 临时改文案做反馈：备份 innerHTML，避免把按钮里的箭头图标弄丢
-    function flash(el, txt) {
-      if (!el.dataset.origHtml) el.dataset.origHtml = el.innerHTML;
-      el.innerHTML = txt;
-      el.classList.add("is-done");
-      setTimeout(function () {
-        el.innerHTML = el.dataset.origHtml;
-        el.classList.remove("is-done");
-      }, 1800);
-    }
-
+    // copyText / flash 已提到模块级（灯箱「复制本张链接」也用同一份）
     function bindCopy(sel, getText, okText) {
       $$(sel).forEach(function (b) {
         b.addEventListener("click", function () {
@@ -597,6 +677,7 @@
   function boot() {
     curtain();
     renderNav();
+    renderRecruit();
     renderFoot();
     reveals();
     counters();

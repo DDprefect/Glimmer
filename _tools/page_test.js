@@ -454,12 +454,131 @@ async function testAdmin() {
 }
 
 /* ======================================================================== */
+async function testCommons() {
+  console.log("\n[commons] 招新条 / 动态 / 页脚 / 投稿入口 / 灯箱分享 / 报名自查 / 404");
+
+  function photosFetch(window) {
+    window.fetch = function (url) {
+      if (url === "api/photos") {
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
+    };
+  }
+  function waitCards(d, ms) {
+    return new Promise(function (resolve) {
+      var t0 = Date.now();
+      (function poll() {
+        if (d.querySelectorAll("#works-grid .work").length || Date.now() - t0 > (ms || 3000)) return resolve();
+        setTimeout(poll, 20);
+      })();
+    });
+  }
+
+  /* ---- 首页：招新状态条 / 近期动态 / 页脚账号 ---- */
+  var dom = await loadPage("index.html", function (w) { baseStubs(w); photosFetch(w); });
+  var d = dom.window.document;
+
+  var rbar = d.getElementById("rbar");
+  ok("招新状态条已渲染", rbar && !rbar.hidden && /rbar--open/.test(rbar.className));
+  ok("招新条文案与跳转按钮", /2026 秋季招新进行中/.test(rbar.textContent) &&
+     d.querySelector(".rbar__cta").getAttribute("href") === "join.html#form", rbar.textContent.trim());
+  ok("近期动态 3 张卡片", d.querySelectorAll("#news .news__item").length === 3,
+     String(d.querySelectorAll("#news .news__item").length));
+  ok("动态含「进行中」标记", !!d.querySelector("#news .news__tag.is-live"));
+
+  var copies = d.querySelectorAll(".foot .foot__copy");
+  ok("页脚两个账号可点击复制", copies.length === 2, String(copies.length));
+  ok("页脚 QQ 号就位", copies[0].getAttribute("data-copy") === "1159554310" && /1159554310/.test(copies[0].textContent));
+  ok("页脚抖音号就位", copies[1].getAttribute("data-copy") === "ltyz_GLIMMER" && /ltyz_GLIMMER/.test(copies[1].textContent));
+  ok("页脚有投稿与关注入口", !!d.querySelector('.foot a[href="upload.html"]') && !!d.querySelector('.foot a[href="share.html"]'));
+  dom.window.close();
+
+  /* ---- 作品集：常驻投稿按钮 + 灯箱复制深链 ---- */
+  var dom2 = await loadPage("gallery.html", function (w) { baseStubs(w); photosFetch(w); });
+  var d2 = dom2.window.document;
+  await waitCards(d2);
+  ok("作品集常驻投稿按钮", !!d2.querySelector('.gbar__submit[href="upload.html"]'));
+
+  /* 拦截剪贴板，验证复制出来的是单作品深链 */
+  var copied = "";
+  Object.defineProperty(dom2.window.navigator, "clipboard", {
+    value: { writeText: function (t) { copied = t; return Promise.resolve(); } },
+    configurable: true
+  });
+  Object.defineProperty(dom2.window, "isSecureContext", { value: true, configurable: true });
+
+  var cards = d2.querySelectorAll("#works-grid .work");
+  cards[0].dispatchEvent(new dom2.window.MouseEvent("click", { bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 120); });
+  var lb = d2.querySelector(".lb");
+  ok("灯箱已打开", lb && lb.classList.contains("is-open"));
+  var copyBtn = d2.querySelector(".lb__copy");
+  ok("灯箱复制按钮可见（该作品有 id）", copyBtn && !copyBtn.hidden);
+
+  copyBtn.dispatchEvent(new dom2.window.MouseEvent("click", { bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("复制的是单作品深链", /^https:\/\/lityzglimmer\.top\/gallery\.html#photo-\d+$/.test(copied), copied);
+  ok("复制后按钮给出反馈", /已复制/.test(copyBtn.textContent), copyBtn.textContent);
+  dom2.window.close();
+
+  /* ---- 静态作品深链：#photo-hanlou-01 也能定位 ---- */
+  var dom5 = await loadPage("gallery.html#photo-hanlou-01", function (w) { baseStubs(w); photosFetch(w); });
+  await new Promise(function (r) { setTimeout(r, 320); });
+  var lb5 = dom5.window.document.querySelector(".lb");
+  ok("静态作品深链可直达灯箱", lb5 && lb5.classList.contains("is-open") &&
+     /hanlou-01|高三喊楼/.test(dom5.window.document.querySelector(".lb__cap").textContent),
+     (dom5.window.document.querySelector(".lb__cap") || {}).textContent);
+  dom5.window.close();
+
+  /* ---- join：报名状态自查 ---- */
+  var sent = null;
+  var dom3 = await loadPage("join.html", function (w) {
+    baseStubs(w);
+    w.fetch = function (url, opt) {
+      if (url === "api/register-status") {
+        sent = JSON.parse(opt.body);
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          return Promise.resolve({ ok: true, found: true, status: "待联系", at: "2026-02-01T10:00:00Z" });
+        } });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: false }); } });
+    };
+  });
+  var d3 = dom3.window.document;
+  ok("报名页有状态自查卡片", !!d3.getElementById("query"));
+  d3.getElementById("s-name").value = "丁";
+  d3.getElementById("s-contact").value = "QQ 88888";
+  d3.getElementById("s-btn").dispatchEvent(new dom3.window.MouseEvent("click", { bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 120); });
+  ok("自查请求带上姓名与联系方式", sent && sent.name === "丁" && sent.contact === "QQ 88888", JSON.stringify(sent));
+  var smsg = d3.getElementById("s-msg");
+  ok("自查结果：显示待联系", !smsg.hidden && /待联系/.test(smsg.textContent) && smsg.className.indexOf("is-ok") !== -1, smsg.textContent);
+
+  d3.getElementById("s-contact").value = "";
+  d3.getElementById("s-btn").dispatchEvent(new dom3.window.MouseEvent("click", { bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("自查缺联系方式 → 报错提示", /请填写报名时用的联系方式/.test(d3.getElementById("s-msg").textContent),
+     d3.getElementById("s-msg").textContent);
+  dom3.window.close();
+
+  /* ---- 404 页 ---- */
+  var dom4 = await loadPage("404.html");
+  var d4 = dom4.window.document;
+  ok("404 页导航已注入", !!d4.querySelector(".nav"));
+  ok("404 页有回首页与作品集入口", !!d4.querySelector('a[href="index.html"]') && !!d4.querySelector('a[href="gallery.html"]'));
+  ok("404 页 noindex", (d4.querySelector('meta[name="robots"]') || {}).content === "noindex");
+  dom4.window.close();
+}
+
+/* ======================================================================== */
 (async function () {
   await testIndex();
   await testGallery();
   await testJoin();
   await testUpload();
   await testAdmin();
+  await testCommons();
   console.log("\n=========================================");
   console.log("结果：" + PASS + " 通过 / " + FAIL + " 失败");
   process.exit(FAIL ? 1 : 0);

@@ -206,12 +206,14 @@
         <div id="join-ok" hidden style="margin-top:28px;padding:24px;border:1px solid var(--line);border-left:3px solid #3F7D4E;border-radius:var(--r-lg);background:rgba(63,125,78,.07)">
           <h3 style="font-family:var(--serif);font-size:1.1rem;margin:0 0 10px">报名成功</h3>
           <p style="margin:0;font-size:.88rem;line-height:1.9;color:var(--ink-2)">
-            你的信息已提交到社团报名库。招新负责人会尽快通过你留下的联系方式与你联系，
-            请留意 QQ / 微信 / 电话。期待在微光见到你。
+            你的信息已提交到社团报名库。招新负责人会通过你留下的联系方式与你联系，
+            <b>招新期间通常在 3 天内</b>，请留意 QQ / 微信 / 电话。
+            等不及的话，可以在本页下方「查一下我的报名状态」自助查询。
           </p>
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
             <a class="btn btn--sm btn--ghost" href="gallery.html">先看看大家拍的</a>
-            <a class="btn btn--sm btn--ghost" href="upload.html">直接投稿一张作品</a>
+            <a class="btn btn--sm btn--ghost" href="about.html">认识一下我们</a>
+            <a class="btn btn--sm btn--ghost" href="#query">查报名状态 ↓</a>
           </div>
         </div>
 
@@ -224,6 +226,26 @@
           </div>
         </div>
       </form>
+    </div>
+
+    <!-- 报名进度自查 -->
+    <div class="up-query" id="query" data-reveal>
+      <span class="eyebrow eyebrow--red">Check Status　查进度</span>
+      <h3 class="up-query__title">查一下我的报名状态</h3>
+      <p>用报名时填的「姓名」与「联系方式」查询。负责人联系过你之后，这里会显示「已联系」；
+         还没轮到的话显示「待联系」，耐心等一等就好。</p>
+      <div class="field--row">
+        <div class="field">
+          <label for="s-name">姓名 / 昵称 <span style="color:var(--red)">*</span></label>
+          <input id="s-name" type="text" maxlength="30" placeholder="报名时填的姓名">
+        </div>
+        <div class="field">
+          <label for="s-contact">联系方式 <span style="color:var(--red)">*</span></label>
+          <input id="s-contact" type="text" maxlength="40" placeholder="报名时填的 QQ / 微信 / 手机号">
+        </div>
+      </div>
+      <button class="btn btn--ghost" type="button" id="s-btn">查询状态</button>
+      <div class="up-msg" id="s-msg" hidden role="status"></div>
     </div>
   </div>
 </section>
@@ -279,7 +301,16 @@
       <details>
         <summary>什么时候可以报名？</summary>
         <div class="faq__body">
-          <p>每学期初会有集中招新，平时也欢迎随时联系我们。先填一份报名信息，负责人会和你对接。</p>
+          <p>每学期初会有集中招新，平时也欢迎随时联系我们：加<b>官方 QQ 群 1159554310</b>，
+             或在<a href="share.html">分享与关注</a>页面扫码关注抖音 <b>ltyz_GLIMMER</b>。
+             先填一份报名信息，负责人会和你对接。</p>
+        </div>
+      </details>
+      <details>
+        <summary>报名之后多久会联系我？</summary>
+        <div class="faq__body">
+          <p>招新期间通常 3 天内会通过你留下的联系方式联系你。如果一直没有消息，
+             可以在报名页下方「查一下我的报名状态」自助查询，或直接加官方 QQ 群 1159554310 询问。</p>
         </div>
       </details>
       <details>
@@ -394,6 +425,56 @@
       })
       .then(function () { btn.disabled = false; });
   });
+
+  /* 报名状态自查：姓名 + 联系方式双因子，服务端只回状态、不回任何个人信息 */
+  (function () {
+    var btn = document.getElementById("s-btn");
+    if (!btn) return;
+    var msg = document.getElementById("s-msg");
+
+    function show(t, cls) {
+      msg.hidden = false;
+      msg.className = "up-msg " + cls;
+      msg.textContent = t;
+    }
+
+    btn.addEventListener("click", function () {
+      var nameEl = document.getElementById("s-name");
+      var cEl = document.getElementById("s-contact");
+      var name = nameEl.value.trim();
+      var contact = cEl.value.trim();
+      if (!name) { show("请填写报名时用的姓名。", "is-err"); nameEl.focus(); return; }
+      if (!contact) { show("请填写报名时用的联系方式。", "is-err"); cEl.focus(); return; }
+
+      btn.disabled = true;
+      show("查询中…", "");
+      fetch("api/register-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, contact: contact })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.ok) throw new Error((j && j.error) || "查询失败");
+          if (!j.found) {
+            show("没查到匹配的报名记录。请确认姓名与联系方式和报名时填的一致；" +
+                 "也可以直接加官方 QQ 群 1159554310 询问。", "is-err");
+            return;
+          }
+          var when = j.at ? String(j.at).slice(0, 10) : "";
+          var tail = j.status === "已联系"
+            ? "负责人已经联系过你了，留意一下消息记录。"
+            : "负责人会尽快通过你留下的联系方式联系你，请留意 QQ / 微信 / 电话。";
+          show("已收到你的报名" + (when ? "（" + when + "）" : "") +
+               "，当前状态：" + j.status + "。" + tail, "is-ok");
+        })
+        .catch(function (e) {
+          show("查询失败：" + (e.message || "网络异常") +
+               "。你也可以直接加官方 QQ 群 1159554310 询问。", "is-err");
+        })
+        .then(function () { btn.disabled = false; });
+    });
+  })();
 
   document.getElementById("copy-btn").addEventListener("click", function () {
     out.select();

@@ -48,6 +48,11 @@
 <body class="has-hero">
 <div data-nav></div>
 
+<!-- ============================================================ 招新状态条
+     内容由 site.js 的 RECRUIT 配置渲染（招新中 / 已结束 / 不显示），
+     改配置即可，不用动这里的结构 -->
+<div id="rbar" hidden></div>
+
 <!-- ============================================================ HERO -->
 <section class="hero" aria-label="微光摄影社 开场">
   <div class="hero__slides" id="hero-slides"></div>
@@ -313,6 +318,45 @@
     <div class="latest-strip" id="latest-strip"></div>
     <div class="works-more" data-reveal>
       <a class="btn btn--ghost" href="gallery.html">去作品集看全部 <span class="btn__arrow">→</span></a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 近期动态 -->
+<section class="section" id="news" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head" data-reveal>
+      <div>
+        <span class="eyebrow eyebrow--gold">News　近期动态</span>
+        <h2 class="h2" style="margin-top:18px">社团最近在忙什么</h2>
+      </div>
+      <span class="section-head__no">06</span>
+    </div>
+
+    <div class="news">
+      <article class="news__item" data-reveal>
+        <span class="news__tag is-live">进行中</span>
+        <span class="news__date">2026 · 秋</span>
+        <h3 class="h3">秋季招新</h3>
+        <p>不设门槛、不唯设备、不限基础。填一份报名信息，负责人会尽快联系你。</p>
+        <a class="news__more" href="join.html">去报名 <span>→</span></a>
+      </article>
+
+      <article class="news__item" data-reveal style="--d:80ms">
+        <span class="news__tag">已完成</span>
+        <span class="news__date">2026 · 夏</span>
+        <h3 class="h3">凤麒高三喊楼影像记录</h3>
+        <p>紫光的舞台、荧光棒与一整片人海，那晚所有的声音都被留在了画面里。</p>
+        <a class="news__more" href="gallery.html#campus">看作品 <span>→</span></a>
+      </article>
+
+      <article class="news__item" data-reveal style="--d:160ms">
+        <span class="news__tag">已完成</span>
+        <span class="news__date">2026 · 春</span>
+        <h3 class="h3">玉武三江外拍采风</h3>
+        <p>风雨桥、茶园梯田与市集人文，把课堂上的构图和光影一点点练成手感。</p>
+        <a class="news__more" href="gallery.html#field">看作品 <span>→</span></a>
+      </article>
     </div>
   </div>
 </section>
