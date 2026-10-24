@@ -161,9 +161,23 @@
         step("put", "on");
         return fetch(o.token.uploadUrl, { method: "PUT", body: o.blob })
           .then(function (r) {
-            if (!r.ok) throw new Error("图片上传失败（HTTP " + r.status + "），请稍后重试");
+            if (!r.ok) throw new Error("图片上传失败（HTTP " + r.status + "）：存储端拒绝了这次上传，请把状态码告诉干部。");
             step("put", "done");
             return o.token;
+          })
+          .catch(function (err) {
+            /* TypeError / Failed to fetch = 浏览器网络层失败：
+               请求未发出或预检被拦——几乎都是 CORS 或桶名/地域不对 */
+            if ((err instanceof TypeError) || /failed to fetch/i.test(err.message || "")) {
+              var host = "";
+              try { host = new URL(o.token.uploadUrl).host; } catch (e) {}
+              throw new Error(
+                "连不上图片服务器（浏览器网络错误）。常见原因：① COS 存储桶的跨域（CORS）规则没配好，" +
+                "或来源不是 https://lityzglimmer.top；② 桶名 / 地域填错。" +
+                (host ? "本次目标地址：" + host + "。" : "") + "请把这行报错发给干部核对。"
+              );
+            }
+            throw err;
           });
       })
 
