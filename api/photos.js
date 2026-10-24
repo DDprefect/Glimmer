@@ -89,6 +89,7 @@ module.exports = async function (req, res) {
     if (photo) await notifyLib.photoSubmitted(photo);
     http.json(req, res, 200, { ok: true, photo: photo });
   } catch (e) {
+    await notifyLib.errorOccurred(req, "投稿写入", e.message);
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }
 };

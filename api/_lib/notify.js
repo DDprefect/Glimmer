@@ -7,6 +7,8 @@
    推送失败绝不影响主流程（5 秒超时，静默吞掉）。
    ========================================================================== */
 
+var rl = require("./ratelimit");
+
 function notify(title, desp) {
   var url = process.env.NOTIFY_URL;
   if (!url) return Promise.resolve(false);
@@ -46,4 +48,18 @@ function signupSubmitted(s) {
   return notify("新同学报名 · " + (s.name || ""), lines);
 }
 
-module.exports = { notify: notify, photoSubmitted: photoSubmitted, signupSubmitted: signupSubmitted };
+/* 接口异常通知（500 路径用；按 IP 限 3 条/10 分钟，防止刷屏） */
+function errorOccurred(req, where, message) {
+  if (!process.env.NOTIFY_URL) return Promise.resolve(false);
+  if (!rl.guard(req, "err-notify", 3, 10 * 60 * 1000)) return Promise.resolve(false);
+  var lines = [
+    "接口：" + where,
+    "时间：" + new Date().toISOString(),
+    "错误：" + String(message || "").slice(0, 500),
+    "",
+    "请到 Vercel 后台 → Deployments → Logs 查看详情"
+  ].join("\n");
+  return notify("接口异常 · " + where, lines);
+}
+
+module.exports = { notify: notify, photoSubmitted: photoSubmitted, signupSubmitted: signupSubmitted, errorOccurred: errorOccurred };

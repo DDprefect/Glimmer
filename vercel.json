@@ -4,5 +4,6 @@
       "path": "/api/keepalive",
       "schedule": "0 3 * * 1"
     }
-  ]
+  ],
+  "regions": ["hkg1"]
 }

@@ -59,6 +59,7 @@ module.exports = async function (req, res) {
     await notifyLib.signupSubmitted({ name: name, class: cls, contact: contact, interest: interest });
     http.json(req, res, 200, { ok: true });
   } catch (e) {
+    await notifyLib.errorOccurred(req, "新生报名", e.message);
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }
 };

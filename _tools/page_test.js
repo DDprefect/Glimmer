@@ -39,6 +39,13 @@ function ok(name, cond, extra) {
 }
 
 function loadPage(file, beforeParse) {
+  /* 支持 "gallery.html#photo-101" 这类带 hash 的文件参数 */
+  var hash = "";
+  var hi = file.indexOf("#");
+  if (hi !== -1) {
+    hash = file.slice(hi);
+    file = file.slice(0, hi);
+  }
   var html = fs.readFileSync(path.join(ROOT, file), "utf8");
   var vc = new VirtualConsole(); // 吞掉 jsdom 的 canvas not implemented 等噪音
   vc.on("jsdomError", function (e) {
@@ -46,7 +53,7 @@ function loadPage(file, beforeParse) {
     console.log("    [jsdomError] " + (d && d.message ? d.message : d));
   });
   var dom = new JSDOM(html, {
-    url: "https://lityzglimmer.top/" + file, // 与生产同源，存储/安全上下文行为真实
+    url: "https://lityzglimmer.top/" + file + hash, // 与生产同源，存储/安全上下文行为真实
     runScripts: "dangerously",
     resources: { interceptors: [localInterceptor] },
     pretendToBeVisual: true,
@@ -127,19 +134,48 @@ async function testGallery() {
   var cards2 = dom2.window.document.querySelectorAll("#works-grid .work");
   ok("接口失败时仍渲染静态作品首屏 15 张（不白屏）", cards2.length === 15, String(cards2.length));
   ok("接口失败时无 data-autorate 卡片", dom2.window.document.querySelectorAll('#works-grid img[data-autorate="1"]').length === 0);
-  dom.window.close(); dom2.window.close();
+
+  /* 深链：#photo-101 → 定位数据库作品并开灯箱 */
+  var dom3 = await loadPage("gallery.html#photo-101", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS }); } });
+    };
+  });
+  await new Promise(function (r) { setTimeout(r, 350); }); // 等接口回来 + 深链应用 + 灯箱打开
+  var lb = dom3.window.document.querySelector(".lb.is-open");
+  ok("深链 #photo-101 → 灯箱打开且是数据库作品", !!lb && /myqcloud\.com/.test((lb.querySelector("img") || {}).getAttribute ? lb.querySelector("img").getAttribute("src") || "" : ""), lb ? "opened" : "not opened");
+  dom.window.close(); dom2.window.close(); dom3.window.close();
 }
 
 /* ======================================================================== */
 async function testIndex() {
   console.log("\n[index] 首页无回归");
-  var dom = await loadPage("index.html");
+  var dom = await loadPage("index.html", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      if (url === "api/photos") {
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
+    };
+  });
   var d = dom.window.document;
   ok("首页导航已注入", !!d.querySelector(".nav"));
   ok("首页页脚已注入", !!d.querySelector(".foot"));
   var works = d.querySelectorAll(".work");
   ok("首页精选区有作品卡片", works.length > 0, String(works.length));
-  dom.window.close();
+  ok("最新收录区块显示", !d.getElementById("latest").hidden);
+  ok("最新收录渲染 2 张卡", d.querySelectorAll("#latest-strip .latest-card").length === 2);
+  ok("卡片链到作品深链", d.querySelector("#latest-strip .latest-card").getAttribute("href") === "gallery.html#photo-101");
+
+  /* 接口失败 → 区块保持隐藏，不挡首页 */
+  var dom2 = await loadPage("index.html", function (window) {
+    baseStubs(window);
+    window.fetch = function () { return Promise.reject(new Error("network")); };
+  });
+  ok("接口失败时最新收录保持隐藏", dom2.window.document.getElementById("latest").hidden);
+  dom.window.close(); dom2.window.close();
 }
 
 /* ======================================================================== */

@@ -32,4 +32,9 @@ function guard(req, scene, max, windowMs) {
   return allow(clientIp(req) + ":" + scene, max, windowMs);
 }
 
-module.exports = { clientIp: clientIp, guard: guard, allow: allow, _buckets: buckets };
+/* 清掉某个 key 的计数（如密码验证成功后） */
+function reset(key) {
+  buckets.delete(key);
+}
+
+module.exports = { clientIp: clientIp, guard: guard, allow: allow, reset: reset, _buckets: buckets };

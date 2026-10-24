@@ -89,19 +89,32 @@ module.exports = async function (req, res) {
     }
 
     var fileUrl = cos.publicUrl(key);
-    var created = await db.photos.create({
-      category: category,
-      title: title,
-      author: author,
-      shot_date: shot_date || null,
-      file_url: fileUrl,
-      status: "pending"
-    });
-    var photo = Array.isArray(created) ? created[0] : created;
+    var photo = null;
+    try {
+      var created = await db.photos.create({
+        category: category,
+        title: title,
+        author: author,
+        shot_date: shot_date || null,
+        file_url: fileUrl,
+        status: "pending"
+      });
+      photo = Array.isArray(created) ? created[0] : created;
+    } catch (e) {
+      /* 入库失败：回删刚写入 COS 的图，避免留下后台看不见的孤儿文件 */
+      try {
+        var rollback = cos.sign("delete", key, 600);
+        await fetch(rollback.url, { method: "DELETE" });
+      } catch (e2) {
+        /* 回删失败也只能留着（COS 控制台可见），不阻塞错误上报 */
+      }
+      throw e;
+    }
     if (photo) await notifyLib.photoSubmitted(photo);
 
     http.json(req, res, 200, { ok: true, photo: photo, fileUrl: fileUrl });
   } catch (e) {
+    await notifyLib.errorOccurred(req, "上传投稿", e.message);
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }
 };

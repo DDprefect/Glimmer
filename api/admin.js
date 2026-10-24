@@ -20,6 +20,8 @@ var crypto = require("crypto");
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
+var notifyLib = require("./_lib/notify");
+var rl = require("./_lib/ratelimit");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -106,11 +108,17 @@ module.exports = async function (req, res) {
     var body = await http.readJson(req);
 
     /* ---- 密码比对（恒定时间，防时序侧信道） ---- */
+    /* 防暴力破解：同一 IP 连续错 5 次锁 10 分钟；验证成功即清零 */
+    var failKey = rl.clientIp(req) + ":admin-fail";
+    if (!rl.allow(failKey, 5, 10 * 60 * 1000)) {
+      return http.json(req, res, 429, { ok: false, error: "密码错误次数过多，已锁定 10 分钟" });
+    }
     var pw = Buffer.from(String(body.password || ""), "utf8");
     var want = Buffer.from(String(process.env.ADMIN_PASSWORD), "utf8");
     if (pw.length !== want.length || !crypto.timingSafeEqual(pw, want)) {
       return http.json(req, res, 401, { ok: false, error: "密码不正确" });
     }
+    rl.reset(failKey);
 
     var action = String(body.action || "");
     var id = http.clean(body.id, 40);
@@ -239,6 +247,10 @@ module.exports = async function (req, res) {
 
     http.json(req, res, 400, { ok: false, error: "未知操作" });
   } catch (e) {
+    if (e && e.unauthorized) {
+      return http.json(req, res, 401, { ok: false, error: "密码不正确" });
+    }
+    await notifyLib.errorOccurred(req, "管理后台", e && e.message);
     http.json(req, res, 500, { ok: false, error: e.message || "服务器错误" });
   }
 };

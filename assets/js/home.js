@@ -1,6 +1,6 @@
 /* ==========================================================================
    微光摄影社 · 首页
-   电影感 Hero 轮播 + 精选作品渲染
+   电影感 Hero 轮播 + 精选作品渲染 + 最新收录（数据库投稿）
    ========================================================================== */
 (function () {
   "use strict";
@@ -135,9 +135,37 @@
     });
   }
 
+  /* ------------------------------------------------ 最新收录（数据库投稿） */
+  function renderLatest() {
+    var sec = $("#latest");
+    var host = $("#latest-strip");
+    if (!sec || !host) return;
+    fetch("api/photos")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.ok || !j.photos || !j.photos.length) return; // 无投稿或接口不可用：静默隐藏
+        var items = j.photos.slice(0, 6);
+        sec.hidden = false;
+        host.innerHTML = items.map(function (p, i) {
+          var sub = p.author ? p.author + " · " + p.category : p.category;
+          return '<a class="latest-card" href="gallery.html#photo-' + p.id + '" style="--i:' + i + '">' +
+            '<span class="latest-card__ph">' +
+              '<img src="' + G.esc(p.file_url) + '" alt="' + G.esc(p.title) + '" loading="lazy" decoding="async">' +
+            "</span>" +
+            '<span class="latest-card__meta">' +
+              "<b>" + G.esc(p.title) + "</b>" +
+              "<i>" + G.esc(sub) + "</i>" +
+            "</span>" +
+          "</a>";
+        }).join("");
+      })
+      .catch(function () { /* 接口不可用：保持隐藏，不影响首页其它部分 */ });
+  }
+
   function boot() {
     initHero();
     renderSections();
+    renderLatest();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

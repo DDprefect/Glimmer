@@ -171,6 +171,10 @@ function startMockSupabase() {
         return send(200, rows);
       }
       if (req.method === "POST") {
+        if (m[1] === "photos" && state.failPhotoInsert) {
+          state.failPhotoInsert = false; // 一次性：模拟一次入库失败
+          return send(500, { message: "模拟入库失败" });
+        }
         var row = JSON.parse(bodyText || "{}");
         row.id = m[1] === "photos" ? state.nextPhoto++ : state.nextSub++;
         row.created_at = new Date().toISOString();
@@ -305,11 +309,11 @@ async function testApi() {
   process.env.COS_REGION = "ap-guangzhou";
   process.env.ADMIN_PASSWORD = "glimmer2026";
 
-  /* COS 删除走外网 —— 测试里桩掉非 Supabase 的 fetch，并记录通知调用 */
+  /* COS 删除与外网通知都走桩；记录 方法|URL 便于断言 */
   var realFetch = globalThis.fetch;
   globalThis.fetch = function (url, opts) {
     if (String(url).indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
-    notifyCalls.push(String(url));
+    notifyCalls.push(String(url) + "|" + ((opts && opts.method) || "GET"));
     return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(""); } });
   };
 
@@ -450,6 +454,25 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "不存在的动作" });
   ok("admin 未知动作 → 400", r.status === 400);
 
+  /* ---------- 密码防爆破：连错 5 次锁 10 分钟 ---------- */
+  rl._buckets.clear();
+  var lockOk = true;
+  for (var li = 0; li < 5; li++) {
+    var lr = await call(P, "POST", "/api/admin", { password: "wrong" + li, action: "list" });
+    if (lr.status !== 401) lockOk = false;
+  }
+  ok("连错 5 次密码均返回 401", lockOk);
+  r = await call(P, "POST", "/api/admin", { password: "wrong6", action: "list" });
+  ok("第 6 次 → 429 锁定", r.status === 429 && /锁定/.test(r.json.error || ""), "status=" + r.status);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
+  ok("锁定期间正确密码也进不来", r.status === 429);
+  rl._buckets.clear();
+  /* 验证成功即清零：错 4 次后对一次，之后仍可再错 5 次 */
+  for (var lj = 0; lj < 4; lj++) await call(P, "POST", "/api/admin", { password: "x", action: "list" });
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
+  ok("错 4 次后正确密码可进（计数器已清零）", r.status === 200);
+  rl._buckets.clear();
+
   /* ---------- 上传通道（服务端转发） ---------- */
   r = await callRaw(P, "POST",
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("服务端上传测试") + "&author=" + encodeURIComponent("测试员"),
@@ -495,6 +518,19 @@ async function testApi() {
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("限流测试越界"),
     jpeg);
   ok("第 16 次上传 → 429 限流", r.status === 429 && /频繁|繁忙/.test(r.json.error || ""), "status=" + r.status + " " + JSON.stringify(r.json));
+  rl._buckets.clear();
+
+  /* ---------- 孤儿图回删：COS 写入成功但入库失败 ---------- */
+  var photosBefore = mock.state.photos.length;
+  mock.state.failPhotoInsert = true;
+  rl._buckets.clear();
+  notifyCalls.length = 0;
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("入库失败回滚"),
+    fakeJpeg());
+  ok("入库失败 → 500 且不入库", r.status === 500 && mock.state.photos.length === photosBefore, "status=" + r.status);
+  ok("已回删 COS 文件（DELETE 签名请求在案）", notifyCalls.some(function (u) { return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/") === 0 && u.indexOf("|DELETE") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
+  ok("接口异常推送已触发", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1 && u.indexOf("|GET") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
   rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */

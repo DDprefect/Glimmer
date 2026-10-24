@@ -143,15 +143,40 @@
         dbItems = j.photos.map(dbToWork);
         all = dbItems.concat(staticAll);
         render(true);
+        /* 深链（#photo-<id>）指向的作品这时才可能存在，补一次应用 */
+        applyHash();
       })
       .catch(function () { /* 静默降级 */ });
 
-    /* ---------------- 从其它页面的锚点直接进入某个分类 ---------------- */
+    /* ---------------- 从其它页面的锚点进入：分类 或 具体作品 ---------------- */
     function applyHash() {
       var k = (location.hash || "").replace("#", "");
       if (!k) return;
-      var hit = CATS.filter(function (c) { return c.key === k; })[0];
-      if (!hit) return;
+
+      /* 作品深链 #photo-<id>（首页「最新收录」点进来）：定位卡片并开灯箱 */
+      var pm = /^photo-(\d+)$/.exec(k);
+      if (pm) {
+        var hit = all.filter(function (w) { return w.db && String(w.id) === "db-" + pm[1]; })[0];
+        if (!hit) return;
+        state.cat = "all";
+        state.shown = Math.max(PER_PAGE, all.indexOf(hit) + 1);
+        $$(".filter", filterHost).forEach(function (b) {
+          b.classList.toggle("is-on", b.getAttribute("data-cat") === "all");
+        });
+        render(true);
+        setTimeout(function () {
+          var idx = state.items.indexOf(hit);
+          var card = $$(".work", grid)[idx];
+          if (card) {
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (window.Lightbox) window.Lightbox.open(state.items, idx);
+          }
+        }, 80);
+        return;
+      }
+
+      var cat = CATS.filter(function (c) { return c.key === k; })[0];
+      if (!cat) return;
       state.cat = k;
       state.shown = PER_PAGE;
       $$(".filter", filterHost).forEach(function (b) {

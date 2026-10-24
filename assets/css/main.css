@@ -1974,8 +1974,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .check--block b { color: var(--red); font-weight: 600; }
 
 /* ---- 投稿进度自查 ---- */
-.up-query {
-  margin-top: 34px;
+.up-query {  margin-top: 34px;
   padding-top: 30px;
   border-top: 1px dashed var(--line-strong);
 }
@@ -2023,6 +2022,72 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* ==========================================================================
+   首页「最新收录」（数据库投稿，接口不可用时整段隐藏）
+   ========================================================================== */
+.latest-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.latest-card {
+  display: block;
+  animation: latestIn .55s var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+.latest-card__ph {
+  display: block;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+  box-shadow: var(--sh-1);
+}
+.latest-card__ph img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .6s var(--ease-out);
+}
+.latest-card:hover .latest-card__ph {
+  border-color: var(--red);
+}
+.latest-card:hover .latest-card__ph img {
+  transform: scale(1.05);
+}
+.latest-card__meta {
+  display: block;
+  margin-top: 11px;
+}
+.latest-card__meta b {
+  display: block;
+  font-family: var(--serif);
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.latest-card__meta i {
+  display: block;
+  font-style: normal;
+  font-size: .72rem;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes latestIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (max-width: 1100px) { .latest-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .latest-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* ==========================================================================
    管理后台
