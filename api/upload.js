@@ -11,10 +11,15 @@ var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
 var notifyLib = require("./_lib/notify");
+var rl = require("./_lib/ratelimit");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 var MAX_BYTES = 4 * 1024 * 1024; // 服务端接收上限（压缩后约 300KB，留足余量）
+var MIN_BYTES = 2 * 1024;        // 小于 2KB 不可能是正常照片
+var RL_MAX = 15;                 // 单 IP 10 分钟内最多 15 次（正常连拍一组也够）
+var RL_WINDOW = 10 * 60 * 1000;
+var GLOBAL_MAX = 30;             // 全局 10 分钟投稿熔断线
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
@@ -27,6 +32,23 @@ module.exports = async function (req, res) {
     ]);
     if (miss.length) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置环境变量：" + miss.join(", ") });
+    }
+
+    /* 防护一：跨站表单 POST 拦截 */
+    if (http.originSuspicious(req)) {
+      return http.json(req, res, 403, { ok: false, error: "来源不受支持" });
+    }
+
+    /* 防护二：单 IP 频率限制 */
+    if (!rl.guard(req, "upload", RL_MAX, RL_WINDOW)) {
+      return http.json(req, res, 429, { ok: false, error: "上传太频繁，请 10 分钟后再试" });
+    }
+
+    /* 防护三：全局熔断——最近 10 分钟投稿量异常直接拒（防换 IP 的脚本洪峰） */
+    var since = new Date(Date.now() - RL_WINDOW).toISOString();
+    var recent = await db.rest("GET", "photos?select=id&created_at=gte." + encodeURIComponent(since) + "&limit=50");
+    if ((recent || []).length >= GLOBAL_MAX) {
+      return http.json(req, res, 429, { ok: false, error: "投稿通道繁忙，请稍后再试" });
     }
 
     var u = new URL(req.url, "http://localhost");
@@ -46,8 +68,9 @@ module.exports = async function (req, res) {
     }
 
     var buf = await http.readRaw(req, MAX_BYTES);
-    if (!buf.length) {
-      return http.json(req, res, 400, { ok: false, error: "图片数据为空" });
+    /* 防护四：JPG 魔数校验，挡掉伪装成图片的其它文件 */
+    if (buf.length < MIN_BYTES || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) {
+      return http.json(req, res, 400, { ok: false, error: "只能上传 JPG 图片" });
     }
 
     /* 对象键服务端生成：分类目录 + 时间戳 + 随机串 */

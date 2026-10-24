@@ -93,6 +93,16 @@ function readRaw(req, limit) {
   });
 }
 
+/* 来源软检查：浏览器发起的跨站 POST 拦截掉。
+   注意：curl 等非浏览器客户端不带 Origin，拦不住也不打算拦——
+   那类攻击靠限流 + 全局熔断 + 人工审核兜底（见 api/_lib/ratelimit.js）。 */
+function originSuspicious(req) {
+  var o = req.headers.origin;
+  if (!o) return false;
+  return !/^https:\/\/([a-z0-9-]+\.)*lityzglimmer\.top$/i.test(o) &&
+         !/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(o);
+}
+
 /* 环境变量自检：返回缺失的变量名列表 */
 function missingEnv(names) {
   return names.filter(function (n) { return !process.env[n]; });
@@ -114,5 +124,6 @@ module.exports = {
   readJson: readJson,
   readRaw: readRaw,
   missingEnv: missingEnv,
+  originSuspicious: originSuspicious,
   clean: clean
 };

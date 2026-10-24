@@ -9,6 +9,7 @@ var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
 var notifyLib = require("./_lib/notify");
+var rl = require("./_lib/ratelimit");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -34,6 +35,14 @@ module.exports = async function (req, res) {
     var miss = http.missingEnv(["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "COS_BUCKET", "COS_REGION"]);
     if (miss.length) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置环境变量：" + miss.join(", ") });
+    }
+
+    /* 防护：跨站 POST 拦截 + 单 IP 频率限制（前端投稿已走 api/upload，此为 API 直写路径） */
+    if (http.originSuspicious(req)) {
+      return http.json(req, res, 403, { ok: false, error: "来源不受支持" });
+    }
+    if (!rl.guard(req, "photos-post", 15, 10 * 60 * 1000)) {
+      return http.json(req, res, 429, { ok: false, error: "提交太频繁，请 10 分钟后再试" });
     }
 
     var body = await http.readJson(req);

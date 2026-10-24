@@ -7,6 +7,11 @@
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var notifyLib = require("./_lib/notify");
+var rl = require("./_lib/ratelimit");
+
+var RL_MAX = 5;                  // 单 IP 10 分钟内最多 5 次
+var RL_WINDOW = 10 * 60 * 1000;
+var GLOBAL_MAX = 20;             // 全局 10 分钟报名熔断线
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
@@ -16,6 +21,23 @@ module.exports = async function (req, res) {
     var miss = http.missingEnv(["SUPABASE_URL", "SUPABASE_SERVICE_KEY"]);
     if (miss.length) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置数据库环境变量：" + miss.join(", ") });
+    }
+
+    /* 防护一：跨站表单 POST 拦截 */
+    if (http.originSuspicious(req)) {
+      return http.json(req, res, 403, { ok: false, error: "来源不受支持" });
+    }
+
+    /* 防护二：单 IP 频率限制 */
+    if (!rl.guard(req, "register", RL_MAX, RL_WINDOW)) {
+      return http.json(req, res, 429, { ok: false, error: "提交太频繁，请 10 分钟后再试" });
+    }
+
+    /* 防护三：全局熔断 */
+    var since = new Date(Date.now() - RL_WINDOW).toISOString();
+    var recent = await db.rest("GET", "submissions?select=id&created_at=gte." + encodeURIComponent(since) + "&limit=50");
+    if ((recent || []).length >= GLOBAL_MAX) {
+      return http.json(req, res, 429, { ok: false, error: "报名通道繁忙，请稍后再试" });
     }
 
     var body = await http.readJson(req);

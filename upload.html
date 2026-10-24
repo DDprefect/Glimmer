@@ -116,6 +116,12 @@
           <label class="check check--block"><input type="checkbox" id="f-orig"> 我确认这张照片是<b>本人原创实拍</b>，了解社团禁止搬运、二改他人作品</label>
         </div>
 
+        <!-- 蜜罐字段：机器人会填，真人看不到（CSS 隐藏） -->
+        <div class="honeypot" aria-hidden="true">
+          <label for="f-web">网站</label>
+          <input id="f-web" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
         <button class="btn" type="submit" id="upload-btn">提交作品 <span class="btn__arrow">→</span></button>
         <p class="form__note">
           提交后作品先进入「待审核」，干部看过没问题就会发布到作品集。

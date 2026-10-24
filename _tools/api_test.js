@@ -16,6 +16,7 @@ var path = require("path");
 
 var ROOT = path.join(__dirname, "..");
 var cos = require(path.join(ROOT, "api/_lib/cos.js"));
+var rl = require(path.join(ROOT, "api/_lib/ratelimit.js"));
 
 var PASS = 0;
 var FAIL = 0;
@@ -139,7 +140,7 @@ function startMockSupabase() {
       if (!m) return send(404, { message: "not found" });
       var table = state[m[1]];
 
-      /* 通用行过滤：eq.X / in.(a,b,c)（searchParams 已百分号解码） */
+      /* 通用行过滤：eq.X / in.(a,b,c) / gte.X（searchParams 已百分号解码） */
       function matches(row) {
         var ok = true;
         u.searchParams.forEach(function (v, k) {
@@ -147,7 +148,9 @@ function startMockSupabase() {
           var me = /^eq\.([\s\S]*)$/.exec(v);
           if (me) { if (String(row[k]) !== me[1]) ok = false; return; }
           var mi = /^in\.\(([\s\S]*)\)$/.exec(v);
-          if (mi) { if (mi[1].split(",").indexOf(String(row[k])) === -1) ok = false; }
+          if (mi) { if (mi[1].split(",").indexOf(String(row[k])) === -1) ok = false; return; }
+          var mg = /^gte\.([\s\S]*)$/.exec(v);
+          if (mg) { if (String(row[k] || "") < mg[1]) ok = false; }
         });
         return ok;
       }
@@ -315,6 +318,15 @@ async function testApi() {
   var notifyCalls = [];
   process.env.NOTIFY_URL = "https://sctapi.ftqq.com/TESTSENDKEY.send";
 
+  /* 合规的假 JPEG：SOI(FFD8FFE0) + 3KB 载荷 + EOI(FFD9) */
+  function fakeJpeg() {
+    return Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+      Buffer.alloc(3000, 0x55),
+      Buffer.from([0xff, 0xd9])
+    ]);
+  }
+
   /* ---------- photos GET ---------- */
   var r = await call(P, "GET", "/api/photos");
   ok("GET /api/photos → 200", r.status === 200 && r.json.ok === true);
@@ -441,7 +453,7 @@ async function testApi() {
   /* ---------- 上传通道（服务端转发） ---------- */
   r = await callRaw(P, "POST",
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("服务端上传测试") + "&author=" + encodeURIComponent("测试员"),
-    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
+    fakeJpeg());
   ok("upload 合法 → 200 且入库 pending", r.status === 200 && r.json.ok && mock.state.photos.some(function (p) { return p.title === "服务端上传测试" && p.status === "pending" && p.category === "校园纪实"; }), JSON.stringify(r.json).slice(0, 120));
   ok("upload 的 file_url 指向本桶", typeof r.json.fileUrl === "string" && r.json.fileUrl.indexOf(COS_BASE) === 0, r.json.fileUrl);
 
@@ -453,6 +465,37 @@ async function testApi() {
 
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("空body"), null);
   ok("upload 空 body → 400", r.status === 400);
+
+  /* ---------- 上传防护 ---------- */
+  /* 魔数校验：非 JPEG 载荷拒绝 */
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("伪装文件"),
+    Buffer.from("这不是图片，是一段伪装成图片的文本内容，长度足够超过 2KB " + "x".repeat(3000)));
+  ok("upload 非 JPEG 魔数 → 400", r.status === 400 && /JPG/.test(r.json.error || ""), JSON.stringify(r.json));
+
+  /* 来源检查：非本站 Origin 的浏览器 POST 拒绝 */
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("跨站测试"),
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]),
+    { Origin: "https://evil.example.com" });
+  ok("upload 恶意 Origin → 403", r.status === 403, "status=" + r.status);
+
+  /* 频率限制：单 IP 10 分钟 15 次，第 16 次 429 */
+  rl._buckets.clear();
+  var jpeg = fakeJpeg();
+  var rateOk = true;
+  for (var n = 0; n < 15; n++) {
+    var rr = await callRaw(P, "POST",
+      "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("限流测试" + n),
+      jpeg);
+    if (rr.status !== 200) { rateOk = false; break; }
+  }
+  ok("前 15 次上传全部放行", rateOk);
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("限流测试越界"),
+    jpeg);
+  ok("第 16 次上传 → 429 限流", r.status === 429 && /频繁|繁忙/.test(r.json.error || ""), "status=" + r.status + " " + JSON.stringify(r.json));
+  rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */
   r = await call(P, "OPTIONS", "/api/photos");

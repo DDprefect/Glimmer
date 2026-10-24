@@ -215,6 +215,15 @@ async function testUpload() {
   await new Promise(function (r) { setTimeout(r, 50); });
   ok("未勾选原创确认 → 提示且不发请求", reqs.length === 0 && /原创/.test(d.getElementById("up-msg").textContent), d.getElementById("up-msg").textContent);
 
+  /* 蜜罐被填 → 静默丢弃（机器人路径） */
+  reqs.length = 0;
+  d.getElementById("f-web").value = "http://spam.example.com";
+  d.getElementById("f-orig").checked = true;
+  d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 50); });
+  ok("蜜罐被填 → 静默丢弃不发请求", reqs.length === 0);
+  d.getElementById("f-web").value = "";
+
   /* 勾选但未选图 → 图片提示 */
   d.getElementById("f-orig").checked = true;
   d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
@@ -292,6 +301,15 @@ async function testAdmin() {
   ok("密码存入了 sessionStorage", dom.window.sessionStorage.getItem("glimmer_admin_pw") === "glimmer2026");
   ok("统计数字渲染（1/1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-offline").textContent === "1" && d.getElementById("st-subs").textContent === "1");
   ok("待审核卡片渲染", /待审作品/.test(d.getElementById("pane-pending").textContent));
+
+  /* 缩略图点击放大（宽版浮层） */
+  var thumb = d.querySelector("#pane-pending .admin-item__img");
+  thumb.click();
+  var zoomEl = d.querySelector(".zoom");
+  ok("点缩略图 → 宽版放大浮层打开", zoomEl && zoomEl.classList.contains("is-open") && zoomEl.classList.contains("zoom--wide") && zoomEl.querySelector("img").getAttribute("src") === thumb.getAttribute("src"), zoomEl ? zoomEl.className : "no zoom");
+  /* 关掉浮层，避免遮挡后续交互 */
+  zoomEl.classList.remove("is-open");
+
   ok("已发布卡片含下架/编辑钮", !!d.querySelector('#pane-approved button[data-act="unpublish"]') && !!d.querySelector('#pane-approved button[data-act="edit"]'));
   ok("已下架卡片含恢复钮", !!d.querySelector('#pane-offline button[data-act="restore"]'));
 

@@ -192,6 +192,12 @@
           <textarea id="f-msg" name="msg" placeholder="喜欢拍什么？想学什么？或者随便聊两句。"></textarea>
         </div>
 
+        <!-- 蜜罐字段：机器人会填，真人看不到（CSS 隐藏） -->
+        <div class="honeypot" aria-hidden="true">
+          <label for="f-web">网站</label>
+          <input id="f-web" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+
         <button class="btn" type="submit" id="join-submit">提交报名 <span class="btn__arrow">→</span></button>
         <p class="form__note">
           提交后报名信息直接进入社团报名库，招新负责人会尽快通过你留下的联系方式与你联系。
@@ -353,6 +359,9 @@
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
+    /* 蜜罐：被填说明是机器人，静默丢弃不提示 */
+    var honey = document.getElementById("f-web");
+    if (honey && honey.value) return;
     var p = buildPayload();
     if (!p.name) { document.getElementById("f-name").focus(); return; }
     if (!p.contact) { document.getElementById("f-contact").focus(); return; }

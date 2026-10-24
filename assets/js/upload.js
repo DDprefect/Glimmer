@@ -113,6 +113,10 @@
   form.addEventListener("submit", function (e) {
     e.preventDefault();
 
+    /* 蜜罐：被填说明是机器人，静默丢弃不提示 */
+    var honey = $("#f-web");
+    if (honey && honey.value) return;
+
     var category = $("#f-cat").value;
     var title = $("#f-title").value.trim();
     var author = $("#f-author").value.trim();

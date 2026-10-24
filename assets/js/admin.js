@@ -352,6 +352,11 @@
     var pane = $(sel);
     if (!pane) return;
     pane.addEventListener("click", function (e) {
+      /* 点缩略图 → 宽版放大（审核看片用） */
+      if (e.target.classList && e.target.classList.contains("admin-item__img")) {
+        if (G.ZOOM) G.ZOOM.open(e.target.getAttribute("src"), true);
+        return;
+      }
       var btn = e.target.closest ? e.target.closest("button[data-act]") : null;
       if (!btn) return;
       var act = btn.getAttribute("data-act");

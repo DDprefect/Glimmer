@@ -1399,6 +1399,13 @@ html.no-anim [data-reveal] { opacity: 1 !important; transform: none !important; 
   color: rgba(255, 255, 255, .74);
 }
 
+/* 宽版：后台审核看大图用 */
+.zoom--wide .zoom__inner img {
+  width: min(94vw, 1500px);
+  max-height: 86vh;
+  object-fit: contain;
+}
+
 .share-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .channel__body { min-width: 0; }
 .channel__kicker {
@@ -1773,6 +1780,17 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
    否则 .up-flow/.up-done 等设置了 display 的元素即使带 hidden 也会显示出来 */
 [hidden] { display: none !important; }
 
+/* 蜜罐字段：对真人不可见，对填表机器人可见 */
+.honeypot {
+  position: absolute !important;
+  left: -9999px !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ---- 字段提示 ---- */
 .field__hint {
   margin-top: 9px;
@@ -2107,6 +2125,12 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   border: 1px solid var(--line);
   flex: none;
   background: var(--paper-2);
+  cursor: zoom-in;
+  transition: border-color .3s, transform .3s var(--ease);
+}
+.admin-item__img:hover {
+  border-color: var(--red);
+  transform: translateY(-2px);
 }
 .admin-item__meta { flex: 1; min-width: 0; }
 .admin-item__meta h3 {

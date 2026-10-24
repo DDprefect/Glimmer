@@ -416,12 +416,14 @@
         if (e.key === "Escape" && el.classList.contains("is-open")) close();
       });
     }
-    function open(src) {
-      ensure();
-      imgEl.src = src;
-      el.classList.add("is-open");
-      document.body.style.overflow = "hidden";
-    }
+  function open(src, wide) {
+    ensure();
+    imgEl.src = src;
+    el.classList.add("is-open");
+    /* wide：照片查看用宽版浮层（二维码用默认窄版） */
+    el.classList.toggle("zoom--wide", !!wide);
+    document.body.style.overflow = "hidden";
+  }
     function close() {
       if (!el || !el.classList.contains("is-open")) return;
       el.classList.remove("is-open");
@@ -503,7 +505,7 @@
     return (window.WORKS || []).filter(function (w) { return !w.hidden; });
   }
 
-  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT };
+  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM };
 
   /* 动态渲染出来的图片：调试/截图模式下立即加载，避免懒加载留白 */
   function eagerAll(root) {
