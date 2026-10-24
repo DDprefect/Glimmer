@@ -214,12 +214,25 @@
      只有首页有 <div id="rbar"> 这个挂载点，其它页面自动跳过。
      招新中：一条深色提示，点右边按钮直接滚到报名表单；
      已结束：导流到官方 QQ 群，别让同学空手而归。 */
+  /* 把招新条的实际高度写进 CSS 变量 --rbar-h：Hero 靠它把负 margin
+     多算一段，顶部才不会露出纸色底（否则导航白字压在浅底上看不清）。
+     字体加载后行高可能再变一点，稍后补测一次。 */
+  function syncRbarH(el) {
+    var set = function () {
+      var h = el.offsetHeight || 0;
+      if (h) document.documentElement.style.setProperty("--rbar-h", h + "px");
+    };
+    set();
+    setTimeout(set, 400);
+  }
+
   function renderRecruit() {
     var el = $("#rbar");
     if (!el || !RECRUIT.show) return;
     var open = !!RECRUIT.open;
     el.hidden = false;
     el.className = "rbar" + (open ? " rbar--open" : " rbar--closed");
+    document.body.classList.add("has-rbar");
     el.innerHTML =
       '<div class="wrap rbar__inner">' +
         '<span class="rbar__dot" aria-hidden="true"></span>' +
@@ -228,6 +241,7 @@
         '<a class="rbar__cta" href="' + (open ? RECRUIT.openLink : RECRUIT.closeLink) + '">' +
           esc(open ? RECRUIT.openCta : RECRUIT.closeCta) + " →</a>" +
       "</div>";
+    syncRbarH(el);
   }
 
   /* ---------------------------------------------------------- 复制文本

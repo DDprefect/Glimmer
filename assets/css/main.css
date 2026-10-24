@@ -2470,6 +2470,16 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   .rbar__cta { font-size: .76rem; }
 }
 
+/* 招新条插在导航与 Hero 之间，会占掉一段文档流高度。
+   Hero 原本只靠 -78px 负 margin 去盖导航，加了招新条后顶部会露出纸色底，
+   导航的白字落在浅底上几乎看不清——所以这里把招新条高度一起吃掉。
+   --rbar-h 由 site.js 按实际渲染高度写入（含桌面/窄屏差异），
+   招新条不显示时不会加 has-rbar 类，此规则不生效。 */
+body.has-rbar .hero {
+  margin-top: calc(-1 * (clamp(62px, 7vw, 78px) + var(--rbar-h, 46px)));
+  min-height: calc(100svh + var(--rbar-h, 46px));
+}
+
 /* ==========================================================================
    页脚「联系我们」账号卡——点击即复制，省得同学抄号码
    ========================================================================== */
@@ -2562,14 +2572,6 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   color: var(--ink-2);
 }
 .news__tag.is-live { background: rgba(176, 58, 34, .12); color: var(--red); }
-.news__date {
-  display: block;
-  font-family: var(--mono);
-  font-size: .72rem;
-  letter-spacing: .1em;
-  color: var(--ink-3);
-  margin-top: 11px;
-}
 .news__more {
   display: inline-block;
   margin-top: 17px;
