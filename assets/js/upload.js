@@ -1,7 +1,8 @@
 /* ==========================================================================
    微光摄影社 · 作品投稿页
-   流程：前端压缩（canvas）→ 申请预签名 URL → 直传 COS → 提交作品信息入库
-   任何一步失败都给出明确提示；接口不可用时保持表单可用，不白屏。
+   流程：前端压缩（canvas）→ POST 到本站 api/upload（服务端签名写 COS 并入库）
+   走服务端转发而非浏览器直传 COS：跨域直传在部分浏览器/网络环境下不稳定
+   （预检被拦），同源转发可彻底绕开；压缩仍在浏览器完成，上传流量不变。
    ========================================================================== */
 (function () {
   "use strict";
@@ -140,78 +141,28 @@
         return blob;
       })
 
-      /* 2) 申请上传凭证 */
+      /* 2) 经服务端上传并入库（同源，无跨域问题） */
       .then(function (blob) {
-        step("token", "on");
-        return fetch("api/upload-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ category: category })
-        })
-          .then(function (r) { return r.json().then(function (j) { return { http: r, j: j }; }); })
-          .then(function (o) {
-            if (!o.http.ok || !o.j.ok) throw new Error(o.j.error || "获取上传凭证失败");
-            step("token", "done");
-            return { blob: blob, token: o.j };
-          });
-      })
-
-      /* 3) 直传 COS（签名在 URL 里，无需任何请求头） */
-      .then(function (o) {
         step("put", "on");
-        return fetch(o.token.uploadUrl, { method: "PUT", body: o.blob })
-          .then(function (r) {
-            if (!r.ok) throw new Error("图片上传失败（HTTP " + r.status + "）：存储端拒绝了这次上传，请把状态码告诉干部。");
-            step("put", "done");
-            return o.token;
-          })
-          .catch(function (err) {
-            /* TypeError / Failed to fetch = 浏览器网络层失败：
-               请求未发出或预检被拦——几乎都是 CORS 或桶名/地域不对 */
-            if ((err instanceof TypeError) || /failed to fetch/i.test(err.message || "")) {
-              var host = "";
-              try { host = new URL(o.token.uploadUrl).host; } catch (e) {}
-              var origin = "";
-              try { origin = location.origin; } catch (e) {}
-              throw new Error(
-                "连不上图片服务器（浏览器网络错误）。常见原因：① COS 存储桶的跨域（CORS）规则没配好，" +
-                "或来源不是 https://lityzglimmer.top；② 桶名 / 地域填错。" +
-                (host ? "本次目标地址：" + host + "。" : "") +
-                (origin ? "本次页面来源：" + origin + "（CORS 只放行 https://lityzglimmer.top）。" : "") +
-                "请把这行报错发给干部核对。"
-              );
-            }
-            throw err;
-          });
-      })
-
-      /* 4) 提交作品信息入库（pending，等干部审核） */
-      .then(function (token) {
-        step("record", "on");
-        return fetch("api/photos", {
+        var qs = "api/upload?category=" + encodeURIComponent(category) +
+          "&title=" + encodeURIComponent(title) +
+          "&author=" + encodeURIComponent(author) +
+          (shot_date ? "&shot_date=" + encodeURIComponent(shot_date) : "");
+        return fetch(qs, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            category: category,
-            title: title,
-            author: author,
-            shot_date: shot_date || "",
-            file_url: token.fileUrl
-          })
+          headers: { "Content-Type": "application/octet-stream" },
+          body: blob
         })
           .then(function (r) { return r.json().then(function (j) { return { http: r, j: j }; }); })
           .then(function (o) {
-            if (!o.http.ok || !o.j.ok) {
-              // 图已上传但信息没写库：提示联系干部，避免用户反复重传
-              throw new Error("__ORPHAN__" + (o.j.error || "作品信息提交失败"));
-            }
-            step("record", "done");
-            return token;
+            if (!o.http.ok || !o.j.ok) throw new Error(o.j.error || "上传失败，请稍后重试");
+            step("put", "done");
+            return o.j;
           });
       })
 
-      .then(function (token) {
-        doneImg.src = token.fileUrl;
+      .then(function (j) {
+        doneImg.src = j.fileUrl;
         done.hidden = false;
         flow.hidden = true;
         showMsg("提交成功！作品已进入待审核队列。", "is-ok");
@@ -222,12 +173,7 @@
       })
 
       .catch(function (err) {
-        var m = (err && err.message) || "提交失败，请稍后重试";
-        if (m.indexOf("__ORPHAN__") === 0) {
-          m = m.replace("__ORPHAN__", "") +
-              "（图片已上传但信息未能入库，请把情况告诉干部手动登记，不要重复提交）";
-        }
-        showMsg(m, "is-err");
+        showMsg((err && err.message) || "提交失败，请稍后重试", "is-err");
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
       })
 

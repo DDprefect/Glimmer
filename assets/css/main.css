@@ -1830,7 +1830,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   margin: 26px 0 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   counter-reset: none;
 }
@@ -1879,8 +1879,8 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   content: "✓";
   font-size: .68rem;
 }
-@media (max-width: 720px) {
-  .up-flow { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 480px) {
+  .up-flow { grid-template-columns: 1fr; }
 }
 
 /* ---- 消息条 ---- */

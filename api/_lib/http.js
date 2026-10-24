@@ -71,6 +71,28 @@ function readJson(req, limit) {
   });
 }
 
+/* 读取原始二进制 body（图片上传用，带体积上限） */
+function readRaw(req, limit) {
+  return new Promise(function (resolve, reject) {
+    var cap = limit || 4 * 1024 * 1024;
+    var size = 0;
+    var chunks = [];
+    req.on("data", function (chunk) {
+      size += chunk.length;
+      if (size > cap) {
+        reject(new Error("请求体过大"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", function () {
+      resolve(Buffer.concat(chunks));
+    });
+    req.on("error", reject);
+  });
+}
+
 /* 环境变量自检：返回缺失的变量名列表 */
 function missingEnv(names) {
   return names.filter(function (n) { return !process.env[n]; });
@@ -90,6 +112,7 @@ module.exports = {
   preflight: preflight,
   requireMethod: requireMethod,
   readJson: readJson,
+  readRaw: readRaw,
   missingEnv: missingEnv,
   clean: clean
 };

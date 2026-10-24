@@ -204,7 +204,8 @@ function startApiServer() {
     "/api/register": require(path.join(ROOT, "api/register.js")),
     "/api/admin": require(path.join(ROOT, "api/admin.js")),
     "/api/photo-status": require(path.join(ROOT, "api/photo-status.js")),
-    "/api/keepalive": require(path.join(ROOT, "api/keepalive.js"))
+    "/api/keepalive": require(path.join(ROOT, "api/keepalive.js")),
+    "/api/upload": require(path.join(ROOT, "api/upload.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -251,6 +252,38 @@ function call(port, method, path, payload, headers) {
     );
     req.on("error", reject);
     if (data) req.write(data);
+    req.end();
+  });
+}
+
+/* 原始二进制 body 调用（图片上传通道用） */
+function callRaw(port, method, path, bodyBuf, headers) {
+  return new Promise(function (resolve, reject) {
+    var req = http.request(
+      {
+        host: "127.0.0.1",
+        port: port,
+        path: path,
+        method: method,
+        headers: Object.assign(
+          { "Content-Type": "application/octet-stream", Origin: "https://lityzglimmer.top" },
+          headers || {},
+          bodyBuf ? { "Content-Length": bodyBuf.length } : {}
+        )
+      },
+      function (res) {
+        var chunks = [];
+        res.on("data", function (c) { chunks.push(c); });
+        res.on("end", function () {
+          var text = Buffer.concat(chunks).toString("utf8");
+          var json = null;
+          try { json = text ? JSON.parse(text) : null; } catch (e) {}
+          resolve({ status: res.statusCode, headers: res.headers, text: text, json: json });
+        });
+      }
+    );
+    req.on("error", reject);
+    if (bodyBuf) req.write(bodyBuf);
     req.end();
   });
 }
@@ -404,6 +437,22 @@ async function testApi() {
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "不存在的动作" });
   ok("admin 未知动作 → 400", r.status === 400);
+
+  /* ---------- 上传通道（服务端转发） ---------- */
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("服务端上传测试") + "&author=" + encodeURIComponent("测试员"),
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]));
+  ok("upload 合法 → 200 且入库 pending", r.status === 200 && r.json.ok && mock.state.photos.some(function (p) { return p.title === "服务端上传测试" && p.status === "pending" && p.category === "校园纪实"; }), JSON.stringify(r.json).slice(0, 120));
+  ok("upload 的 file_url 指向本桶", typeof r.json.fileUrl === "string" && r.json.fileUrl.indexOf(COS_BASE) === 0, r.json.fileUrl);
+
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("乱分类") + "&title=x", Buffer.from([1, 2, 3]));
+  ok("upload 非法分类 → 400", r.status === 400);
+
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实"), Buffer.from([1, 2, 3]));
+  ok("upload 缺标题 → 400", r.status === 400);
+
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("空body"), null);
+  ok("upload 空 body → 400", r.status === 400);
 
   /* ---------- 协议层 ---------- */
   r = await call(P, "OPTIONS", "/api/photos");
