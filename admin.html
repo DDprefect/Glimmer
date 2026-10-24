@@ -56,6 +56,7 @@
       <div class="admin-stats">
         <span class="admin-stat"><b id="st-pending">0</b>待审核</span>
         <span class="admin-stat"><b id="st-approved">0</b>已发布</span>
+        <span class="admin-stat"><b id="st-offline">0</b>已下架</span>
         <span class="admin-stat"><b id="st-subs">0</b>条报名</span>
       </div>
       <button class="btn btn--ghost btn--sm" type="button" id="admin-logout">退出登录</button>
@@ -64,21 +65,46 @@
     <div class="admin-tabs" role="tablist">
       <button class="admin-tab is-on" type="button" data-tab="pending" role="tab">待审核 <b id="tab-pending">0</b></button>
       <button class="admin-tab" type="button" data-tab="approved" role="tab">已发布 <b id="tab-approved">0</b></button>
+      <button class="admin-tab" type="button" data-tab="offline" role="tab">已下架 <b id="tab-offline">0</b></button>
       <button class="admin-tab" type="button" data-tab="subs" role="tab">报名列表 <b id="tab-subs">0</b></button>
     </div>
 
     <div class="up-msg" id="panel-msg" hidden role="status"></div>
 
     <!-- 待审核 -->
-    <div class="admin-pane is-on" id="pane-pending"></div>
+    <div class="admin-pane is-on" id="pane-pending">
+      <div class="admin-batch" id="batch-bar" hidden>
+        <label class="check"><input type="checkbox" id="batch-all"> 全选</label>
+        <span class="admin-batch__n" id="batch-n">已选 0 项</span>
+        <button class="admin-op admin-op--ok" type="button" id="batch-approve">批量通过</button>
+        <button class="admin-op admin-op--del" type="button" id="batch-del">批量删除</button>
+      </div>
+      <div id="pending-list"></div>
+    </div>
 
     <!-- 已发布 -->
-    <div class="admin-pane" id="pane-approved"></div>
+    <div class="admin-pane" id="pane-approved">
+      <div class="admin-pane-head">
+        <p class="admin-subs-tip">已发布的作品会出现在官网作品集；「下架」后数据与图片都保留，只是前台不可见，可随时恢复。</p>
+        <button class="btn btn--sm" type="button" id="export-photos">导出投稿 CSV</button>
+      </div>
+      <div id="approved-list"></div>
+    </div>
+
+    <!-- 已下架 -->
+    <div class="admin-pane" id="pane-offline">
+      <p class="admin-subs-tip" style="margin-bottom:18px">这里是从作品集下架的作品，数据与 COS 图片均保留；可恢复上架或彻底删除。</p>
+      <div id="offline-list"></div>
+    </div>
 
     <!-- 报名 -->
     <div class="admin-pane" id="pane-subs">
       <div class="admin-subs-bar">
-        <p class="admin-subs-tip">报名按提交时间倒序；导出文件为 CSV（带 BOM，Excel 可直接打开）。</p>
+        <div class="admin-filters">
+          <button class="admin-filter is-on" type="button" data-f="all">全部 <b id="f-all">0</b></button>
+          <button class="admin-filter" type="button" data-f="no">未联系 <b id="f-no">0</b></button>
+          <button class="admin-filter" type="button" data-f="yes">已联系 <b id="f-yes">0</b></button>
+        </div>
         <button class="btn btn--sm" type="button" id="export-csv">导出报名 CSV</button>
       </div>
       <div class="admin-table-wrap" id="subs-table"></div>

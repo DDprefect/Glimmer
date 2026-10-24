@@ -24,6 +24,7 @@
   var done = $("#up-done");
   var doneImg = $("#up-done-img");
   var btn = $("#upload-btn");
+  var origBox = $("#f-orig");
 
   /* ---------------- 文件名回显 ---------------- */
   fileInput.addEventListener("change", function () {
@@ -119,6 +120,7 @@
 
     if (!category) { showMsg("请先选择作品分类。", "is-err"); $("#f-cat").focus(); return; }
     if (!title) { showMsg("请填写作品标题。", "is-err"); $("#f-title").focus(); return; }
+    if (!origBox || !origBox.checked) { showMsg("请先勾选确认「本人原创实拍」。", "is-err"); if (origBox) origBox.focus(); return; }
     if (!file) { showMsg("请选择要上传的图片。", "is-err"); fileInput.focus(); return; }
     if (!/^image\//.test(file.type)) { showMsg("只能上传图片文件（JPG / PNG / WebP）。", "is-err"); return; }
     if (file.size > MAX_RAW_BYTES) { showMsg("原图超过 30MB，请先裁剪或换一张。", "is-err"); return; }
@@ -216,4 +218,55 @@
         btn.classList.remove("is-busy");
       });
   });
+
+  /* ---------------- 投稿进度自查 ---------------- */
+  var qBtn = $("#q-btn");
+  var qMsg = $("#q-msg");
+  var qResult = $("#q-result");
+  if (qBtn) {
+    var qShow = function (text, kind) {
+      qMsg.hidden = !text;
+      qMsg.textContent = text || "";
+      qMsg.classList.remove("is-err", "is-ok");
+      if (kind) qMsg.classList.add(kind);
+    };
+    qBtn.addEventListener("click", function () {
+      var title = $("#q-title").value.trim();
+      var author = $("#q-author").value.trim();
+      if (!title) { qShow("请填写作品标题。", "is-err"); $("#q-title").focus(); return; }
+      qBtn.disabled = true;
+      qResult.innerHTML = "";
+      qShow("");
+      fetch("api/photo-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title, author: author })
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.ok) throw new Error((j && j.error) || "查询失败");
+          if (!j.items.length) {
+            qShow("没有找到匹配的投稿，请核对标题与署名（需与投稿时填写一致）。", "is-err");
+            return;
+          }
+          qResult.innerHTML = j.items.map(function (it) {
+            var badge = it.status === "approved" ? " is-ok" : it.status === "offline" ? " is-off" : "";
+            var link = it.status === "approved"
+              ? '<a class="up-q__link" href="' + G.esc(it.file_url) + '" target="_blank" rel="noopener">查看作品 →</a>'
+              : "";
+            return '<div class="up-q' + badge + '">' +
+              "<b>" + G.esc(it.title) + "</b>" +
+              "<span class='up-q__cat'>" + G.esc(it.category) + "</span>" +
+              "<span class='up-q__st'>" + G.esc(it.statusText) + "</span>" +
+              link +
+            "</div>";
+          }).join("");
+          qShow("查到 " + j.items.length + " 条记录。", "is-ok");
+        })
+        .catch(function (e) {
+          qShow(e.message || "查询失败，请稍后重试。", "is-err");
+        })
+        .then(function () { qBtn.disabled = false; });
+    });
+  }
 })();

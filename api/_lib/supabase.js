@@ -61,8 +61,15 @@ var photos = {
   pending: function () {
     return rest("GET", "photos?select=*&status=eq.pending&order=created_at.desc");
   },
+  /* 已下架（曾发布、后被干部隐藏的作品） */
+  offline: function () {
+    return rest("GET", "photos?select=*&status=eq.offline&order=created_at.desc");
+  },
   byId: function (id) {
     return rest("GET", "photos?select=id,file_url&id=eq." + encodeURIComponent(id));
+  },
+  byIds: function (ids) {
+    return rest("GET", "photos?select=id,file_url&id=in.(" + ids.map(encodeURIComponent).join(",") + ")");
   },
   create: function (row) {
     return rest("POST", "photos", row);
@@ -70,8 +77,21 @@ var photos = {
   setStatus: function (id, status) {
     return rest("PATCH", "photos?id=eq." + encodeURIComponent(id), { status: status });
   },
+  setStatusMany: function (ids, status) {
+    return rest("PATCH", "photos?id=in.(" + ids.map(encodeURIComponent).join(",") + ")", { status: status });
+  },
+  update: function (id, row) {
+    return rest("PATCH", "photos?id=eq." + encodeURIComponent(id), row);
+  },
   remove: function (id) {
     return rest("DELETE", "photos?id=eq." + encodeURIComponent(id));
+  },
+  removeMany: function (ids) {
+    return rest("DELETE", "photos?id=in.(" + ids.map(encodeURIComponent).join(",") + ")");
+  },
+  /* 全量（后台导出用） */
+  all: function () {
+    return rest("GET", "photos?select=*&order=created_at.desc");
   }
 };
 
@@ -81,6 +101,9 @@ var submissions = {
   },
   create: function (row) {
     return rest("POST", "submissions", row);
+  },
+  setHandled: function (id, handled) {
+    return rest("PATCH", "submissions?id=eq." + encodeURIComponent(id), { handled: !!handled });
   }
 };
 

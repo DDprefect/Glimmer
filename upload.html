@@ -111,6 +111,11 @@
           <p class="field__hint">支持 JPG / PNG / WebP，原图多大都没关系——浏览器会先自动压缩到约 300KB 再上传，网页展示画质足够。原图请自己在手机或电脑里留存。</p>
         </div>
 
+        <div class="field">
+          <label>原创确认 <span style="color:var(--red)">*</span></label>
+          <label class="check check--block"><input type="checkbox" id="f-orig"> 我确认这张照片是<b>本人原创实拍</b>，了解社团禁止搬运、二改他人作品</label>
+        </div>
+
         <button class="btn" type="submit" id="upload-btn">提交作品 <span class="btn__arrow">→</span></button>
         <p class="form__note">
           提交后作品先进入「待审核」，干部看过没问题就会发布到作品集。
@@ -136,6 +141,26 @@
           <p>作品已进入社团相册池。干部审核通过后，它会带着你的署名出现在官网作品集里。想再投一张？<a href="upload.html">继续投稿</a>，或去<a href="gallery.html">作品集</a>看看大家拍的。</p>
         </div>
       </div>
+    </div>
+
+    <!-- 投稿进度自查 -->
+    <div class="up-query" data-reveal>
+      <span class="eyebrow eyebrow--red">Check Status　查进度</span>
+      <h3 class="up-query__title">查一下我的投稿审核到哪了</h3>
+      <p>用投稿时填的「作品标题」（和「署名」，填了的话）查询。审核通过后这里会给出作品链接。</p>
+      <div class="field--row">
+        <div class="field">
+          <label for="q-title">作品标题 <span style="color:var(--red)">*</span></label>
+          <input id="q-title" type="text" maxlength="50" placeholder="投稿时填的标题">
+        </div>
+        <div class="field">
+          <label for="q-author">署名</label>
+          <input id="q-author" type="text" maxlength="30" placeholder="投稿时填的署名（可留空）">
+        </div>
+      </div>
+      <button class="btn btn--ghost" type="button" id="q-btn">查询状态</button>
+      <div class="up-msg" id="q-msg" hidden role="status"></div>
+      <div id="q-result"></div>
     </div>
   </div>
 </section>

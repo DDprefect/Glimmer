@@ -138,21 +138,32 @@ function startMockSupabase() {
       var m = /^\/rest\/v1\/(photos|submissions)$/.exec(u.pathname);
       if (!m) return send(404, { message: "not found" });
       var table = state[m[1]];
-      var status = u.searchParams.get("status");
-      var idEq = u.searchParams.get("id");
+
+      /* 通用行过滤：eq.X / in.(a,b,c)（searchParams 已百分号解码） */
+      function matches(row) {
+        var ok = true;
+        u.searchParams.forEach(function (v, k) {
+          if (k === "order" || k === "select" || k === "limit") return;
+          var me = /^eq\.([\s\S]*)$/.exec(v);
+          if (me) { if (String(row[k]) !== me[1]) ok = false; return; }
+          var mi = /^in\.\(([\s\S]*)\)$/.exec(v);
+          if (mi) { if (mi[1].split(",").indexOf(String(row[k])) === -1) ok = false; }
+        });
+        return ok;
+      }
+      /* 取 id 过滤目标（eq 或 in） */
+      function idFilter() {
+        var v = u.searchParams.get("id");
+        if (!v) return null;
+        var mi = /^in\.\(([\s\S]*)\)$/.exec(v);
+        if (mi) return function (r) { return mi[1].split(",").indexOf(String(r.id)) !== -1; };
+        return function (r) { return String(r.id) === v.replace(/^eq\./, ""); };
+      }
 
       if (req.method === "GET") {
-        var rows = table.slice();
-        if (m[1] === "photos" && status) {
-          var want = status.replace(/^eq\./, "");
-          rows = rows.filter(function (r) { return r.status === want; });
-        }
-        if (idEq) {
-          var wid = Number(idEq.replace(/^eq\./, ""));
-          rows = rows.filter(function (r) { return r.id === wid; });
-        }
+        var rows = table.filter(matches);
         if (u.searchParams.get("order") === "created_at.desc") {
-          rows.sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; });
+          rows = rows.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; });
         }
         return send(200, rows);
       }
@@ -164,14 +175,14 @@ function startMockSupabase() {
         return send(201, [row]);
       }
       if (req.method === "PATCH") {
-        var pid = Number(idEq.replace(/^eq\./, ""));
         var patch = JSON.parse(bodyText || "{}");
-        table.forEach(function (r) { if (r.id === pid) Object.assign(r, patch); });
+        var pf = idFilter();
+        table.forEach(function (r) { if (!pf || pf(r)) Object.assign(r, patch); });
         return send(204, null);
       }
       if (req.method === "DELETE") {
-        var did = Number(idEq.replace(/^eq\./, ""));
-        state[m[1]] = table.filter(function (r) { return r.id !== did; });
+        var df = idFilter();
+        state[m[1]] = table.filter(function (r) { return !df || !df(r); });
         return send(204, null);
       }
       send(405, { message: "method not allowed" });
@@ -191,7 +202,9 @@ function startApiServer() {
     "/api/upload-token": require(path.join(ROOT, "api/upload-token.js")),
     "/api/photos": require(path.join(ROOT, "api/photos.js")),
     "/api/register": require(path.join(ROOT, "api/register.js")),
-    "/api/admin": require(path.join(ROOT, "api/admin.js"))
+    "/api/admin": require(path.join(ROOT, "api/admin.js")),
+    "/api/photo-status": require(path.join(ROOT, "api/photo-status.js")),
+    "/api/keepalive": require(path.join(ROOT, "api/keepalive.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -256,15 +269,18 @@ async function testApi() {
   process.env.COS_REGION = "ap-guangzhou";
   process.env.ADMIN_PASSWORD = "glimmer2026";
 
-  /* COS 删除走外网 —— 测试里桩掉非 Supabase 的 fetch */
+  /* COS 删除走外网 —— 测试里桩掉非 Supabase 的 fetch，并记录通知调用 */
   var realFetch = globalThis.fetch;
   globalThis.fetch = function (url, opts) {
     if (String(url).indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
-    return Promise.resolve({ ok: true, status: 204, text: function () { return Promise.resolve(""); } });
+    notifyCalls.push(String(url));
+    return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(""); } });
   };
 
   var P = api.port;
   var COS_BASE = "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/";
+  var notifyCalls = [];
+  process.env.NOTIFY_URL = "https://sctapi.ftqq.com/TESTSENDKEY.send";
 
   /* ---------- photos GET ---------- */
   var r = await call(P, "GET", "/api/photos");
@@ -275,6 +291,7 @@ async function testApi() {
   /* ---------- photos POST 校验 ---------- */
   r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "新作", author: "丁", shot_date: "2026-02-01", file_url: COS_BASE + "校园纪实/9.jpg" });
   ok("POST 合法作品 → 200 且入库为 pending", r.status === 200 && r.json.ok && mock.state.photos.some(function (p) { return p.id === r.json.photo.id && p.status === "pending"; }));
+  ok("投稿成功触发通知推送", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1; }), notifyCalls[0]);
 
   r = await call(P, "POST", "/api/photos", { category: "随便分", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
   ok("POST 非法分类 → 400", r.status === 400);
@@ -294,6 +311,7 @@ async function testApi() {
   /* ---------- register ---------- */
   r = await call(P, "POST", "/api/register", { name: "新生甲", class: "高一1班", contact: "QQ 999", interest: "校园纪实", intro: "想学构图" });
   ok("POST /api/register → 200 且入库", r.status === 200 && mock.state.submissions.some(function (s) { return s.name === "新生甲"; }));
+  ok("报名成功触发通知推送", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1; }));
 
   r = await call(P, "POST", "/api/register", { name: "", contact: "QQ 999" });
   ok("register 缺姓名 → 400", r.status === 400);
@@ -310,14 +328,26 @@ async function testApi() {
   r = await call(P, "POST", "/api/upload-token", { category: "不存在的分类" });
   ok("upload-token 非法分类 → 400", r.status === 400);
 
+  /* ---------- keepalive（保活） ---------- */
+  r = await call(P, "GET", "/api/keepalive");
+  ok("keepalive GET → 200", r.status === 200 && r.json.ok === true && r.json.alive === true);
+
+  /* ---------- photo-status（投稿自查） ---------- */
+  r = await call(P, "POST", "/api/photo-status", { title: "新作", author: "丁" });
+  ok("photo-status 命中 → 状态中文化", r.status === 200 && r.json.items.length === 1 && r.json.items[0].statusText === "待审核", JSON.stringify(r.json.items));
+  r = await call(P, "POST", "/api/photo-status", { title: "不存在的标题" });
+  ok("photo-status 未命中 → 空列表", r.status === 200 && r.json.items.length === 0);
+  r = await call(P, "POST", "/api/photo-status", { title: "" });
+  ok("photo-status 缺标题 → 400", r.status === 400);
+
   /* ---------- admin ---------- */
   r = await call(P, "POST", "/api/admin", { password: "wrong", action: "list" });
   ok("admin 错密码 → 401", r.status === 401);
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
-  // pending = 种子 1 条 + 前面 POST 测试新入库 1 条；approved = 种子 2 条；submissions = 种子 1 + register 测试 1
-  ok("admin list → 200 三段数据", r.status === 200 && r.json.pending.length === 2 && r.json.approved.length === 2 && r.json.submissions.length === 2,
-     "pending=" + r.json.pending.length + " approved=" + r.json.approved.length + " subs=" + r.json.submissions.length);
+  // pending = 种子 1 条 + 前面 POST 测试新入库 1 条；approved = 种子 2 条；offline = 0；submissions = 种子 1 + register 测试 1
+  ok("admin list → 200 四段数据", r.status === 200 && r.json.pending.length === 2 && r.json.approved.length === 2 && r.json.offline.length === 0 && r.json.submissions.length === 2,
+     "pending=" + r.json.pending.length + " approved=" + r.json.approved.length + " offline=" + r.json.offline.length + " subs=" + r.json.submissions.length);
 
   var pendingId = r.json.pending[0].id;
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "approve", id: String(pendingId) });
@@ -331,9 +361,45 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "delete", id: "999" });
   ok("delete 不存在 id → 404", r.status === 404);
 
+  /* ---------- 下架 / 恢复 ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "unpublish", id: "3" });
+  ok("unpublish → 200 且状态变 offline", r.status === 200 && mock.state.photos.some(function (p) { return p.id === 3 && p.status === "offline"; }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
+  ok("list 返回 offline 段", r.json.offline.length === 1 && r.json.offline[0].id === 3);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "restore", id: "3" });
+  ok("restore → 恢复 approved", r.status === 200 && mock.state.photos.some(function (p) { return p.id === 3 && p.status === "approved"; }));
+
+  /* ---------- 批量 ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: ["2", "4"], op: "approve" });
+  ok("批量通过 → 200 且 done=2", r.status === 200 && r.json.done === 2);
+  ok("批量通过后全部 approved", ["2", "4"].every(function (id) { return mock.state.photos.some(function (p) { return String(p.id) === id && p.status === "approved"; }); }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: ["2", "4"], op: "delete" });
+  ok("批量删除 → 200 且行消失", r.status === 200 && r.json.done === 2 && !["2", "4"].some(function (id) { return mock.state.photos.some(function (p) { return String(p.id) === id; }); }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: [], op: "approve" });
+  ok("批量空选择 → 400", r.status === 400);
+
+  /* ---------- 编辑作品 ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: "3", title: "改过的标题", author: "新署名", category: "校外采风", shot_date: "2026-03-03" });
+  ok("update → 200 且落库", r.status === 200 && mock.state.photos.some(function (p) { return p.id === 3 && p.title === "改过的标题" && p.author === "新署名" && p.category === "校外采风"; }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: "3", category: "非法分类" });
+  ok("update 非法分类 → 400", r.status === 400);
+
+  /* ---------- 报名已联系 ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "mark_handled", id: "1", handled: true });
+  ok("mark_handled → 200 且落库", r.status === 200 && mock.state.submissions.some(function (s) { return s.id === 1 && s.handled === true; }));
+
+  /* ---------- 导出报名 CSV（含已联系列） ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "export" });
+  ok("报名 CSV 含「是否已联系」列与值", r.text.indexOf("是否已联系") !== -1 && r.text.indexOf("已联系", r.text.indexOf("是否已联系")) !== -1);
+
+  /* ---------- 导出投稿 CSV ---------- */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "export_photos" });
+  ok("导出投稿 CSV → 200 text/csv", r.status === 200 && /text\/csv/.test(r.headers["content-type"] || ""));
+  ok("投稿 CSV 状态中文化（已发布）", r.text.indexOf("已发布") !== -1);
+
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "export" });
   ok("export → 200 text/csv", r.status === 200 && /text\/csv/.test(r.headers["content-type"] || ""));
-  ok("CSV 带 BOM + 表头", r.text.charCodeAt(0) === 0xfeff && r.text.indexOf("ID,姓名,年级班级,联系方式,感兴趣方向,想说的话,提交时间") === 1, r.text.slice(0, 60));
+  ok("CSV 带 BOM + 表头", r.text.charCodeAt(0) === 0xfeff && r.text.indexOf("ID,姓名,年级班级,联系方式,感兴趣方向,想说的话,是否已联系,提交时间") === 1, r.text.slice(0, 60));
   ok("CSV 正确转义引号/逗号/换行", r.text.indexOf('"含""引号"",同学"') !== -1 && r.text.indexOf("喜欢拍\r\n换行的") !== -1);
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "不存在的动作" });

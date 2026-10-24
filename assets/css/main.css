@@ -1944,6 +1944,68 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   opacity: .62;
 }
 
+/* ---- 原创确认勾选（块状） ---- */
+.check--block {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  line-height: 1.7;
+  text-align: left;
+  padding: 12px 18px;
+}
+.check--block b { color: var(--red); font-weight: 600; }
+
+/* ---- 投稿进度自查 ---- */
+.up-query {
+  margin-top: 34px;
+  padding-top: 30px;
+  border-top: 1px dashed var(--line-strong);
+}
+.up-query__title {
+  font-family: var(--serif);
+  font-size: 1.15rem;
+  margin: 14px 0 8px;
+}
+.up-query > p {
+  font-size: .84rem;
+  color: var(--ink-3);
+  line-height: 1.85;
+  margin: 0 0 20px;
+}
+.up-q {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--r);
+  background: var(--card);
+  font-size: .86rem;
+}
+.up-q b { font-family: var(--serif); font-weight: 600; }
+.up-q__cat { font-size: .74rem; color: var(--ink-3); font-family: var(--mono); }
+.up-q__st {
+  font-size: .72rem;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  letter-spacing: .06em;
+}
+.up-q.is-ok { border-left-color: #3F7D4E; }
+.up-q.is-ok .up-q__st { background: rgba(63, 125, 78, .14); color: #2F5F3B; }
+.up-q.is-off { border-left-color: var(--ink-3); }
+.up-q__link {
+  margin-left: auto;
+  color: var(--red);
+  font-size: .8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ==========================================================================
    管理后台
    ========================================================================== */
@@ -2096,6 +2158,128 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-lg);
 }
+
+/* ---- 面板头部（说明 + 导出按钮） ---- */
+.admin-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.admin-pane-head .admin-subs-tip { margin: 0; flex: 1; min-width: 240px; }
+
+/* ---- 批量操作条 ---- */
+.admin-batch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.admin-batch__n {
+  font-size: .78rem;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  margin-right: auto;
+}
+
+/* ---- 卡片内选择框 ---- */
+.admin-item__sel {
+  padding: 8px 12px;
+  flex: none;
+}
+
+/* ---- 内联编辑表单 ---- */
+.admin-edit {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.admin-item.is-editing .admin-item__meta { display: none; }
+.admin-item.is-editing .admin-item__ops { display: none; }
+.admin-item.is-editing .admin-edit { display: grid; }
+.admin-edit input, .admin-edit select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--paper);
+  font: inherit;
+  font-size: .84rem;
+  color: var(--ink);
+}
+.admin-edit input:focus, .admin-edit select:focus {
+  outline: none;
+  border-color: var(--red);
+  background: #fff;
+}
+.admin-edit__ops {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+@media (max-width: 720px) {
+  .admin-edit { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---- 报名筛选 ---- */
+.admin-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-filter {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 99px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: .8rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: .5em;
+  transition: all .3s var(--ease);
+}
+.admin-filter b {
+  font-family: var(--mono);
+  font-size: .66rem;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--paper-3);
+}
+.admin-filter:hover { border-color: var(--ink-3); color: var(--ink); }
+.admin-filter.is-on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.admin-filter.is-on b { background: rgba(255, 255, 255, .22); color: #fff; }
+
+/* ---- 报名「已联系」切换钮 ---- */
+.admin-handled {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  border-radius: 99px;
+  padding: 5px 13px;
+  font: inherit;
+  font-size: .72rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .3s var(--ease);
+}
+.admin-handled.is-yes {
+  background: rgba(63, 125, 78, .12);
+  border-color: rgba(63, 125, 78, .4);
+  color: #2F5F3B;
+}
+.admin-handled:hover { border-color: var(--ink); color: var(--ink); }
+.admin-handled:disabled { opacity: .5; pointer-events: none; }
 
 .admin-subs-bar {
   display: flex;

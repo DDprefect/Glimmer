@@ -3,17 +3,26 @@
    POST /api/admin — 管理后台（社长 / 干部）
    密码校验：请求体携带密码，与服务端 ADMIN_PASSWORD 做恒定时间比对，不符 401。
    动作 action：
-     list         待审核 + 已发布 + 报名列表
-     approve      审核通过（status → approved）
-     delete       删除作品（删数据库行，并尽力删 COS 文件）
-     submissions  只看报名列表
-     export       导出报名 CSV
+     list           待审核 + 已发布 + 已下架 + 报名列表
+     approve        审核通过（pending → approved）
+     unpublish      下架（approved → offline，数据与图片保留）
+     restore        恢复上架（offline → approved）
+     delete         删除作品（删数据库行，并尽力删 COS 文件）
+     batch          批量操作 { ids: [...], op: "approve" | "delete" }
+     update         编辑作品 { id, title, author, category, shot_date }
+     submissions    只看报名列表
+     mark_handled   标记报名已 / 未联系 { id, handled }
+     export         导出报名 CSV
+     export_photos  导出全部投稿 CSV
    ========================================================================== */
 
 var crypto = require("crypto");
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
+
+var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
+var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /* 报名 CSV 列（顺序即导出顺序） */
 var SUB_COLS = [
@@ -23,21 +32,65 @@ var SUB_COLS = [
   ["contact", "联系方式"],
   ["interest", "感兴趣方向"],
   ["intro", "想说的话"],
+  ["handled", "是否已联系"],
   ["created_at", "提交时间"]
 ];
 
-function toCsv(rows) {
+/* 投稿 CSV 列 */
+var PHOTO_COLS = [
+  ["id", "ID"],
+  ["category", "分类"],
+  ["title", "标题"],
+  ["author", "署名"],
+  ["shot_date", "拍摄日期"],
+  ["status", "状态"],
+  ["created_at", "提交时间"],
+  ["file_url", "图片地址"]
+];
+
+var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架" };
+
+function toCsv(rows, cols, map) {
   function esc(v) {
     var s = v == null ? "" : String(v);
     // 字段内换行规范成 CRLF（RFC 4180），Excel 打开最稳
     s = s.replace(/\r?\n/g, "\r\n");
     return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
-  var lines = [SUB_COLS.map(function (c) { return esc(c[1]); }).join(",")];
+  var lines = [cols.map(function (c) { return esc(c[1]); }).join(",")];
   (rows || []).forEach(function (r) {
-    lines.push(SUB_COLS.map(function (c) { return esc(r[c[0]]); }).join(","));
+    lines.push(cols.map(function (c) {
+      var raw = r[c[0]];
+      return esc(map ? map(raw, c[0], r) : raw);
+    }).join(","));
   });
   return lines.join("\r\n");
+}
+
+function sendCsv(req, res, filename, csv) {
+  http.applyCors(req, res);
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="' + filename + '"');
+  res.setHeader("Cache-Control", "no-store");
+  res.end("\uFEFF" + csv);
+}
+
+/* 尽力删除 COS 文件；返回成功删除数 */
+async function deleteCosFiles(rows) {
+  var deleted = 0;
+  for (var i = 0; i < (rows || []).length; i++) {
+    var key = cos.keyFromUrl(rows[i].file_url);
+    if (!key) continue;
+    try {
+      var signed = cos.sign("delete", key, 600);
+      var del = await fetch(signed.url, { method: "DELETE" });
+      if (del.ok || del.status === 204) deleted++;
+    } catch (e) {
+      /* 单文件失败不阻塞其余 */
+    }
+  }
+  return deleted;
 }
 
 module.exports = async function (req, res) {
@@ -62,45 +115,99 @@ module.exports = async function (req, res) {
     var action = String(body.action || "");
     var id = http.clean(body.id, 40);
 
+    /* ---------------- list ---------------- */
     if (action === "list") {
       var pending = await db.photos.pending();
       var approved = await db.photos.approved();
+      var offline = await db.photos.offline();
       var subs = await db.submissions.all();
       http.json(req, res, 200, {
         ok: true,
         pending: pending || [],
         approved: approved || [],
+        offline: offline || [],
         submissions: subs || []
       });
       return;
     }
 
-    if (action === "approve") {
+    /* ---------------- 单个状态动作 ---------------- */
+    if (action === "approve" || action === "unpublish" || action === "restore") {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
-      await db.photos.setStatus(id, "approved");
+      var status = action === "approve" ? "approved" : action === "unpublish" ? "offline" : "approved";
+      await db.photos.setStatus(id, status);
       http.json(req, res, 200, { ok: true });
       return;
     }
 
+    /* ---------------- 删除单个 ---------------- */
     if (action === "delete") {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
-      var rows = await db.photos.byId(id);
-      var row = Array.isArray(rows) ? rows[0] : null;
-      if (!row) return http.json(req, res, 404, { ok: false, error: "作品不存在或已删除" });
+      var rows1 = await db.photos.byId(id);
+      var row1 = Array.isArray(rows1) ? rows1[0] : null;
+      if (!row1) return http.json(req, res, 404, { ok: false, error: "作品不存在或已删除" });
       await db.photos.remove(id);
-      /* 尽力删 COS 文件；失败不阻塞数据库删除（孤儿图可事后在 COS 控制台清理） */
-      var key = cos.keyFromUrl(row.file_url);
-      var cosDeleted = false;
-      if (key) {
-        try {
-          var signed = cos.sign("delete", key, 600);
-          var del = await fetch(signed.url, { method: "DELETE" });
-          cosDeleted = del.ok || del.status === 204;
-        } catch (e) {
-          cosDeleted = false;
-        }
-      }
+      var cosDeleted = (await deleteCosFiles([row1])) > 0;
       http.json(req, res, 200, { ok: true, cosDeleted: cosDeleted });
+      return;
+    }
+
+    /* ---------------- 批量 ---------------- */
+    if (action === "batch") {
+      var ids = Array.isArray(body.ids) ? body.ids.map(function (x) { return http.clean(x, 40); }).filter(Boolean) : [];
+      var op = String(body.op || "");
+      if (!ids.length) return http.json(req, res, 400, { ok: false, error: "没有选中的作品" });
+      if (ids.length > 100) return http.json(req, res, 400, { ok: false, error: "单次最多处理 100 条" });
+
+      if (op === "approve") {
+        await db.photos.setStatusMany(ids, "approved");
+        http.json(req, res, 200, { ok: true, done: ids.length });
+        return;
+      }
+      if (op === "delete") {
+        var rowsN = await db.photos.byIds(ids);
+        await db.photos.removeMany(ids);
+        var cosDeletedN = await deleteCosFiles(rowsN);
+        http.json(req, res, 200, { ok: true, done: ids.length, cosDeleted: cosDeletedN });
+        return;
+      }
+      http.json(req, res, 400, { ok: false, error: "未知批量操作" });
+      return;
+    }
+
+    /* ---------------- 编辑作品 ---------------- */
+    if (action === "update") {
+      if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
+      var patch = {};
+      var title = http.clean(body.title, 50);
+      var author = http.clean(body.author, 30);
+      var category = http.clean(body.category, 20);
+      var shot_date = http.clean(body.shot_date, 10);
+      if (title) patch.title = title;
+      if (author !== undefined) patch.author = author;
+      if (category) {
+        if (CATEGORIES.indexOf(category) === -1) {
+          return http.json(req, res, 400, { ok: false, error: "分类不合法（仅限四个官方分类）" });
+        }
+        patch.category = category;
+      }
+      if (shot_date && !DATE_RE.test(shot_date)) {
+        return http.json(req, res, 400, { ok: false, error: "拍摄日期格式应为 YYYY-MM-DD" });
+      }
+      if (shot_date) patch.shot_date = shot_date;
+      if (!Object.keys(patch).length) {
+        return http.json(req, res, 400, { ok: false, error: "没有要修改的内容" });
+      }
+      await db.photos.update(id, patch);
+      http.json(req, res, 200, { ok: true });
+      return;
+    }
+
+    /* ---------------- 报名已联系 ---------------- */
+    if (action === "mark_handled") {
+      if (!id) return http.json(req, res, 400, { ok: false, error: "缺少报名 id" });
+      await db.submissions.setHandled(id, !!body.handled);
+      http.json(req, res, 200, { ok: true });
       return;
     }
 
@@ -110,15 +217,23 @@ module.exports = async function (req, res) {
       return;
     }
 
+    /* ---------------- 导出报名 CSV ---------------- */
     if (action === "export") {
       var allRows = await db.submissions.all();
-      http.applyCors(req, res);
-      res.statusCode = 200;
-      res.setHeader("Content-Type", "text/csv; charset=utf-8");
-      res.setHeader("Content-Disposition", 'attachment; filename="glimmer-submissions.csv"');
-      res.setHeader("Cache-Control", "no-store");
-      /* 带 BOM：Excel 直接双击打开不乱码 */
-      res.end("\uFEFF" + toCsv(allRows));
+      sendCsv(req, res, "glimmer-submissions.csv", toCsv(allRows, SUB_COLS, function (v, key) {
+        if (key === "handled") return v ? "已联系" : "未联系";
+        return v;
+      }));
+      return;
+    }
+
+    /* ---------------- 导出投稿 CSV ---------------- */
+    if (action === "export_photos") {
+      var allPhotos = await db.photos.all();
+      sendCsv(req, res, "glimmer-photos.csv", toCsv(allPhotos, PHOTO_COLS, function (v, key) {
+        if (key === "status") return STATUS_TEXT[v] || v || "";
+        return v;
+      }));
       return;
     }
 

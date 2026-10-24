@@ -199,6 +199,8 @@ async function testUpload() {
   var d = dom.window.document;
   ok("分类四值齐全", d.querySelectorAll("#f-cat option").length === 5); // 含占位
   ok("表单关键字段在位", !!d.getElementById("f-title") && !!d.getElementById("f-file"));
+  ok("原创确认勾选在位", !!d.getElementById("f-orig"));
+  ok("投稿进度查询区块在位", !!d.getElementById("q-btn") && !!d.getElementById("q-title"));
   ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
 
   /* 缺文件 → 校验提示，不发请求 */
@@ -211,7 +213,23 @@ async function testUpload() {
   d.getElementById("f-title").value = "测试投稿";
   d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
   await new Promise(function (r) { setTimeout(r, 50); });
+  ok("未勾选原创确认 → 提示且不发请求", reqs.length === 0 && /原创/.test(d.getElementById("up-msg").textContent), d.getElementById("up-msg").textContent);
+
+  /* 勾选但未选图 → 图片提示 */
+  d.getElementById("f-orig").checked = true;
+  d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 50); });
   ok("未选图时给出提示且不发请求", reqs.length === 0 && /选择要上传的图片/.test(d.getElementById("up-msg").textContent));
+
+  /* 状态查询交互 */
+  dom.window.fetch = function (url, opts) {
+    reqs.push(url);
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, items: [{ title: "测试投稿", category: "校园纪实", status: "approved", statusText: "已发布", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/x.jpg", created_at: "2026-02-01T00:00:00Z" }] }); } });
+  };
+  d.getElementById("q-title").value = "测试投稿";
+  d.getElementById("q-btn").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("进度查询 → 请求 photo-status 且渲染结果", reqs.some(function (u) { return u === "api/photo-status"; }) && /已发布/.test(d.getElementById("q-result").textContent), d.getElementById("q-result").textContent);
 
   /* 接口链路（压缩步骤在 jsdom 无 canvas 会 graceful 失败，验证不死页） */
   var fakeFile = new dom.window.File([new Uint8Array([1, 2, 3])], "t.jpg", { type: "image/jpeg" });
@@ -249,7 +267,8 @@ async function testAdmin() {
             ok: true,
             pending: [{ id: 7, category: "校园纪实", title: "待审作品", author: "同学甲", shot_date: "2026-02-01", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/7.jpg", status: "pending", created_at: "2026-02-02T00:00:00Z" }],
             approved: [{ id: 8, category: "城市与远方", title: "已发作品", author: "同学乙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/城市与远方/8.jpg", status: "approved", created_at: "2026-02-01T00:00:00Z" }],
-            submissions: [{ id: 1, name: "报名人", class: "高一1班", contact: "QQ 1", interest: "人像", intro: "嗨", created_at: "2026-02-01T00:00:00Z" }]
+            offline: [{ id: 9, category: "人像与视觉", title: "下架作品", author: "同学丙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/人像与视觉/9.jpg", status: "offline", created_at: "2026-01-31T00:00:00Z" }],
+            submissions: [{ id: 1, name: "报名人", class: "高一1班", contact: "QQ 1", interest: "人像", intro: "嗨", handled: false, created_at: "2026-02-01T00:00:00Z" }]
           });
         }
       });
@@ -271,8 +290,38 @@ async function testAdmin() {
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("登录后面板显示", !d.getElementById("panel").hidden);
   ok("密码存入了 sessionStorage", dom.window.sessionStorage.getItem("glimmer_admin_pw") === "glimmer2026");
-  ok("统计数字渲染（1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-subs").textContent === "1");
+  ok("统计数字渲染（1/1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-offline").textContent === "1" && d.getElementById("st-subs").textContent === "1");
   ok("待审核卡片渲染", /待审作品/.test(d.getElementById("pane-pending").textContent));
+  ok("已发布卡片含下架/编辑钮", !!d.querySelector('#pane-approved button[data-act="unpublish"]') && !!d.querySelector('#pane-approved button[data-act="edit"]'));
+  ok("已下架卡片含恢复钮", !!d.querySelector('#pane-offline button[data-act="restore"]'));
+
+  /* 批量通过 */
+  callLog.length = 0;
+  var cb = d.querySelector("#pane-pending .batch-cb");
+  cb.checked = true;
+  cb.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  ok("勾选后计数更新", d.getElementById("batch-n").textContent === "已选 1 项", d.getElementById("batch-n").textContent);
+  d.getElementById("batch-approve").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("批量通过 → 请求 batch 动作", callLog.some(function (b) { return b && b.action === "batch" && b.op === "approve" && b.ids && b.ids.length === 1; }), JSON.stringify(callLog));
+
+  /* 内联编辑 */
+  callLog.length = 0;
+  var editBtn = d.querySelector('#pane-approved button[data-act="edit"]');
+  editBtn.click();
+  var editCard = editBtn.closest(".admin-item");
+  ok("点编辑 → 卡片进入编辑态", editCard.classList.contains("is-editing"));
+  var editForm = editCard.querySelector(".admin-edit");
+  editForm.querySelector('[name="title"]').value = "改后的标题";
+  editForm.dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("编辑表单提交 → 请求 update 动作", callLog.some(function (b) { return b && b.action === "update" && b.title === "改后的标题"; }), JSON.stringify(callLog));
+
+  /* 下架 */
+  callLog.length = 0;
+  d.querySelector('#pane-approved button[data-act="unpublish"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点下架 → 请求 unpublish 动作", callLog.some(function (b) { return b && b.action === "unpublish"; }), JSON.stringify(callLog));
 
   /* 审核通过 */
   var approveBtn = d.querySelector('#pane-pending button[data-act="approve"]');
@@ -294,6 +343,23 @@ async function testAdmin() {
   subsTab.click();
   ok("报名选项卡可见且含导出按钮", d.getElementById("pane-subs").classList.contains("is-on") && !!d.getElementById("export-csv"));
   ok("报名表格渲染", /报名人/.test(d.getElementById("subs-table").textContent));
+
+  /* 报名筛选 + 已联系切换 */
+  d.querySelector('.admin-filter[data-f="yes"]').click();
+  ok("筛选「已联系」→ 无记录时空态", /没有符合条件/.test(d.getElementById("subs-table").textContent));
+  d.querySelector('.admin-filter[data-f="all"]').click();
+  callLog.length = 0;
+  var toggle = d.querySelector('#subs-table button[data-act="toggle"]');
+  toggle.click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点「未联系」→ 请求 mark_handled(true)", callLog.some(function (b) { return b && b.action === "mark_handled" && b.handled === true; }), JSON.stringify(callLog));
+
+  /* 导出投稿 CSV */
+  callLog.length = 0;
+  mode = "csv";
+  d.getElementById("export-photos").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("导出投稿 → 请求 export_photos", callLog.some(function (b) { return b && b.action === "export_photos"; }), JSON.stringify(callLog));
 
   /* 导出 */
   mode = "csv";

@@ -8,6 +8,7 @@
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
+var notifyLib = require("./_lib/notify");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,7 +75,10 @@ module.exports = async function (req, res) {
       status: "pending"
     };
     var created = await db.photos.create(row);
-    http.json(req, res, 200, { ok: true, photo: Array.isArray(created) ? created[0] : created });
+    /* 推送通知（未配置 NOTIFY_URL 时静默跳过；失败不影响提交结果） */
+    var photo = Array.isArray(created) ? created[0] : created;
+    if (photo) await notifyLib.photoSubmitted(photo);
+    http.json(req, res, 200, { ok: true, photo: photo });
   } catch (e) {
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }

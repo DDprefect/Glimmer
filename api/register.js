@@ -6,6 +6,7 @@
 
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
+var notifyLib = require("./_lib/notify");
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
@@ -32,6 +33,8 @@ module.exports = async function (req, res) {
     }
 
     await db.submissions.create({ name: name, class: cls, contact: contact, interest: interest, intro: intro });
+    /* 推送通知（未配置 NOTIFY_URL 时静默跳过；失败不影响提交结果） */
+    await notifyLib.signupSubmitted({ name: name, class: cls, contact: contact, interest: interest });
     http.json(req, res, 200, { ok: true });
   } catch (e) {
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
