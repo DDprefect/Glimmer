@@ -171,10 +171,14 @@
             if ((err instanceof TypeError) || /failed to fetch/i.test(err.message || "")) {
               var host = "";
               try { host = new URL(o.token.uploadUrl).host; } catch (e) {}
+              var origin = "";
+              try { origin = location.origin; } catch (e) {}
               throw new Error(
                 "连不上图片服务器（浏览器网络错误）。常见原因：① COS 存储桶的跨域（CORS）规则没配好，" +
                 "或来源不是 https://lityzglimmer.top；② 桶名 / 地域填错。" +
-                (host ? "本次目标地址：" + host + "。" : "") + "请把这行报错发给干部核对。"
+                (host ? "本次目标地址：" + host + "。" : "") +
+                (origin ? "本次页面来源：" + origin + "（CORS 只放行 https://lityzglimmer.top）。" : "") +
+                "请把这行报错发给干部核对。"
               );
             }
             throw err;
