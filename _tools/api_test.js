@@ -5,8 +5,9 @@
    两部分：
      A. COS 签名向量测试 —— 用腾讯云官方文档《对象存储 请求签名》里的
         完整示例逐步验证 api/_lib/cos.js 的算法实现
-     B. 接口集成测试 —— 本地 mock Supabase REST + node http 挂载 4 个真实
-        handler，跑完整请求/响应断言（校验规则、401、审核/删除/导出 CSV）
+     B. 接口集成测试 —— 本地 mock Supabase REST + node http 挂载真实
+        handler，跑完整请求/响应断言（校验规则、401、审核/删除/导出 CSV、
+        上传防护、EXIF 清洗、备份、限流/锁定/回删）
    ========================================================================== */
 
 var assert = require("assert");
@@ -119,7 +120,8 @@ function startMockSupabase() {
     ],
     nextPhoto: 4,
     nextSub: 2,
-    sawServiceKey: false
+    sawServiceKey: false,
+    rejectExifCol: false
   };
 
   var server = http.createServer(function (req, res) {
@@ -171,11 +173,17 @@ function startMockSupabase() {
         return send(200, rows);
       }
       if (req.method === "POST") {
+        var parsed = JSON.parse(bodyText || "{}");
         if (m[1] === "photos" && state.failPhotoInsert) {
           state.failPhotoInsert = false; // 一次性：模拟一次入库失败
           return send(500, { message: "模拟入库失败" });
         }
-        var row = JSON.parse(bodyText || "{}");
+        /* 模拟旧库没有 exif 列：带 exif 的插入一律被拒（PGRST204） */
+        if (m[1] === "photos" && state.rejectExifCol && parsed.exif !== undefined) {
+          state.rejectExifCol = false;
+          return send(400, { code: "PGRST204", message: "Could not find the 'exif' column of 'photos' in the schema cache" });
+        }
+        var row = parsed;
         row.id = m[1] === "photos" ? state.nextPhoto++ : state.nextSub++;
         row.created_at = new Date().toISOString();
         table.push(row);
@@ -206,13 +214,13 @@ function startMockSupabase() {
 /* ---- 挂载真实 handler 的本地 API 服务器 ---- */
 function startApiServer() {
   var handlers = {
-    "/api/upload-token": require(path.join(ROOT, "api/upload-token.js")),
     "/api/photos": require(path.join(ROOT, "api/photos.js")),
     "/api/register": require(path.join(ROOT, "api/register.js")),
     "/api/admin": require(path.join(ROOT, "api/admin.js")),
     "/api/photo-status": require(path.join(ROOT, "api/photo-status.js")),
     "/api/keepalive": require(path.join(ROOT, "api/keepalive.js")),
-    "/api/upload": require(path.join(ROOT, "api/upload.js"))
+    "/api/upload": require(path.join(ROOT, "api/upload.js")),
+    "/api/backup": require(path.join(ROOT, "api/backup.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -337,25 +345,16 @@ async function testApi() {
   ok("GET 只返回 approved", r.json.photos.length === 2 && r.json.photos.every(function (p) { return p.status === "approved"; }));
   ok("GET 按 created_at 倒序", r.json.photos[0].id === 1 && r.json.photos[1].id === 3);
 
-  /* ---------- photos POST 校验 ---------- */
-  r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "新作", author: "丁", shot_date: "2026-02-01", file_url: COS_BASE + "校园纪实/9.jpg" });
-  ok("POST 合法作品 → 200 且入库为 pending", r.status === 200 && r.json.ok && mock.state.photos.some(function (p) { return p.id === r.json.photo.id && p.status === "pending"; }));
+  /* ---------- photos 已收敛为只读（投稿只走 /api/upload） ---------- */
+  r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
+  ok("photos 不再接受 POST → 405", r.status === 405);
+
+  /* 预置一条 pending（走 /api/upload 通道，供后续 photo-status / 管理后台断言） */
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("新作") + "&author=" + encodeURIComponent("丁") + "&shot_date=" + encodeURIComponent("2026-02-01"),
+    fakeJpeg());
+  ok("upload 预置 pending → 200 且入库", r.status === 200 && mock.state.photos.some(function (p) { return p.title === "新作" && p.author === "丁" && p.status === "pending"; }), JSON.stringify(r.json).slice(0, 120));
   ok("投稿成功触发通知推送", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1; }), notifyCalls[0]);
-
-  r = await call(P, "POST", "/api/photos", { category: "随便分", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
-  ok("POST 非法分类 → 400", r.status === 400);
-
-  r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "", file_url: COS_BASE + "校园纪实/9.jpg" });
-  ok("POST 缺标题 → 400", r.status === 400);
-
-  r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "x", file_url: "https://evil.example.com/a.jpg" });
-  ok("POST 外链地址 → 400", r.status === 400);
-
-  r = await call(P, "POST", "/api/photos", { category: "人像与视觉", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
-  ok("POST 地址与分类不符 → 400", r.status === 400);
-
-  r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "x", shot_date: "2026/02/01", file_url: COS_BASE + "校园纪实/9.jpg" });
-  ok("POST 日期格式错 → 400", r.status === 400);
 
   /* ---------- register ---------- */
   r = await call(P, "POST", "/api/register", { name: "新生甲", class: "高一1班", contact: "QQ 999", interest: "校园纪实", intro: "想学构图" });
@@ -367,15 +366,6 @@ async function testApi() {
 
   r = await call(P, "POST", "/api/register", { name: "x", contact: "" });
   ok("register 缺联系方式 → 400", r.status === 400);
-
-  /* ---------- upload-token ---------- */
-  r = await call(P, "POST", "/api/upload-token", { category: "校外采风" });
-  ok("upload-token 合法分类 → 200", r.status === 200 && r.json.ok === true);
-  ok("对象键落在分类目录下", typeof r.json.key === "string" && r.json.key.indexOf("校外采风/") === 0, r.json.key);
-  ok("返回预签名 uploadUrl 与公开 fileUrl", /^https:\/\/glimmer-photos\.cos\.ap-guangzhou\.myqcloud\.com\/.*q-signature=[0-9a-f]{40}$/.test(r.json.uploadUrl) && r.json.fileUrl.indexOf(COS_BASE) === 0);
-
-  r = await call(P, "POST", "/api/upload-token", { category: "不存在的分类" });
-  ok("upload-token 非法分类 → 400", r.status === 400);
 
   /* ---------- keepalive（保活） ---------- */
   r = await call(P, "GET", "/api/keepalive");
@@ -445,6 +435,7 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "export_photos" });
   ok("导出投稿 CSV → 200 text/csv", r.status === 200 && /text\/csv/.test(r.headers["content-type"] || ""));
   ok("投稿 CSV 状态中文化（已发布）", r.text.indexOf("已发布") !== -1);
+  ok("投稿 CSV 含拍摄参数列", r.text.indexOf("拍摄参数") !== -1);
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "export" });
   ok("export → 200 text/csv", r.status === 200 && /text\/csv/.test(r.headers["content-type"] || ""));
@@ -489,6 +480,52 @@ async function testApi() {
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("空body"), null);
   ok("upload 空 body → 400", r.status === 400);
 
+  /* ---------- EXIF 拍摄参数：合法字段入库，非法/超长字段剥掉 ---------- */
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("人像与视觉") + "&title=" + encodeURIComponent("带参数的作品") +
+    "&author=" + encodeURIComponent("测试员") + "&shot_date=" + encodeURIComponent("2026-04-01") +
+    "&exif=" + encodeURIComponent(JSON.stringify({
+      camera: "NIKON ZR", lens: "NIKKOR Z 24-120mm f/4 S",
+      aperture: "f/4", shutter: "1/50s", iso: "ISO 450", focal: "51mm", shotAt: "2026-04-01",
+      evil: "<script>alert(1)</script>"
+    })),
+    fakeJpeg());
+  ok("upload 带 EXIF → 200 且参数入库", r.status === 200 && mock.state.photos.some(function (p) {
+    return p.title === "带参数的作品" && p.exif && p.exif.camera === "NIKON ZR" &&
+      p.exif.aperture === "f/4" && p.exif.shutter === "1/50s" && p.exif.iso === "ISO 450" && p.exif.focal === "51mm";
+  }), JSON.stringify(r.json).slice(0, 160));
+  ok("upload EXIF 白名单外字段不入库", mock.state.photos.some(function (p) {
+    return p.title === "带参数的作品" && p.exif && !("evil" in p.exif);
+  }));
+
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("人像与视觉") + "&title=" + encodeURIComponent("脏参数作品") +
+    "&exif=" + encodeURIComponent(JSON.stringify({
+      camera: "x".repeat(100), aperture: "不是光圈", shutter: "1/250s", iso: "ISO-abc"
+    })),
+    fakeJpeg());
+  ok("upload EXIF 超长/非法格式字段被丢弃", mock.state.photos.some(function (p) {
+    return p.title === "脏参数作品" && p.exif && !p.exif.camera && !p.exif.aperture && !p.exif.iso && p.exif.shutter === "1/250s";
+  }), JSON.stringify(r.json).slice(0, 160));
+
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("人像与视觉") + "&title=" + encodeURIComponent("坏JSON作品") +
+    "&exif=" + encodeURIComponent("{这不是合法JSON"),
+    fakeJpeg());
+  ok("upload EXIF 不是合法 JSON → 不影响投稿", r.status === 200 && mock.state.photos.some(function (p) {
+    return p.title === "坏JSON作品" && !p.exif;
+  }), "status=" + r.status);
+
+  /* 旧库尚未加 exif 列：服务端自动去掉该字段重试，投稿不失败 */
+  mock.state.rejectExifCol = true;
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("旧库无列作品") +
+    "&exif=" + encodeURIComponent(JSON.stringify({ camera: "NIKON ZR", aperture: "f/4" })),
+    fakeJpeg());
+  ok("旧库缺 exif 列 → 去掉该字段重试，投稿仍成功", r.status === 200 && mock.state.photos.some(function (p) {
+    return p.title === "旧库无列作品" && !("exif" in p) && p.status === "pending";
+  }), "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+
   /* ---------- 上传防护 ---------- */
   /* 魔数校验：非 JPEG 载荷拒绝 */
   r = await callRaw(P, "POST",
@@ -532,6 +569,32 @@ async function testApi() {
   ok("已回删 COS 文件（DELETE 签名请求在案）", notifyCalls.some(function (u) { return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/") === 0 && u.indexOf("|DELETE") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
   ok("接口异常推送已触发", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1 && u.indexOf("|GET") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
   rl._buckets.clear();
+
+  /* ---------- 备份：CSV 写 COS _backup/ ---------- */
+  rl._buckets.clear();
+  notifyCalls.length = 0;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "backup" });
+  ok("admin backup → 200 且返回 stamp/计数", r.status === 200 && r.json.ok && r.json.backup && /^\d{4}-\d{2}$/.test(r.json.backup.stamp || "") && typeof r.json.backup.photos === "number", JSON.stringify(r.json).slice(0, 160));
+  ok("备份 CSV 已写 COS _backup/（PUT 签名请求在案）", notifyCalls.some(function (u) {
+    return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/_backup/") === 0 && u.indexOf("|PUT") !== -1;
+  }), notifyCalls.join(" ; ").slice(0, 240));
+  ok("备份完成推送通知", notifyCalls.some(function (u) {
+    return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1 && u.indexOf("|GET") !== -1;
+  }), notifyCalls.join(" ; ").slice(0, 240));
+
+  /* ---------- cron 备份通道（可选 CRON_SECRET 鉴权） ---------- */
+  delete process.env.CRON_SECRET;
+  r = await call(P, "GET", "/api/backup");
+  ok("GET /api/backup 无 CRON_SECRET → 200", r.status === 200 && r.json.ok && r.json.backup, "status=" + r.status);
+
+  process.env.CRON_SECRET = "cron-secret-123";
+  r = await call(P, "GET", "/api/backup");
+  ok("配了 CRON_SECRET 但缺 Authorization → 401", r.status === 401, "status=" + r.status);
+  r = await call(P, "GET", "/api/backup", null, { Authorization: "Bearer wrong-secret" });
+  ok("Bearer 不对 → 401", r.status === 401, "status=" + r.status);
+  r = await call(P, "GET", "/api/backup", null, { Authorization: "Bearer cron-secret-123" });
+  ok("Bearer 正确 → 200", r.status === 200 && r.json.ok && r.json.backup, "status=" + r.status);
+  delete process.env.CRON_SECRET;
 
   /* ---------- 协议层 ---------- */
   r = await call(P, "OPTIONS", "/api/photos");

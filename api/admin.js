@@ -14,60 +14,25 @@
      mark_handled   标记报名已 / 未联系 { id, handled }
      export         导出报名 CSV
      export_photos  导出全部投稿 CSV
+     backup         立即备份（导出 CSV 写入 COS _backup/ 目录并推送通知）
    ========================================================================== */
 
 var crypto = require("crypto");
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
+var csvLib = require("./_lib/csv");
+var backupLib = require("./_lib/backup");
 var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/* 报名 CSV 列（顺序即导出顺序） */
-var SUB_COLS = [
-  ["id", "ID"],
-  ["name", "姓名"],
-  ["class", "年级班级"],
-  ["contact", "联系方式"],
-  ["interest", "感兴趣方向"],
-  ["intro", "想说的话"],
-  ["handled", "是否已联系"],
-  ["created_at", "提交时间"]
-];
-
-/* 投稿 CSV 列 */
-var PHOTO_COLS = [
-  ["id", "ID"],
-  ["category", "分类"],
-  ["title", "标题"],
-  ["author", "署名"],
-  ["shot_date", "拍摄日期"],
-  ["status", "状态"],
-  ["created_at", "提交时间"],
-  ["file_url", "图片地址"]
-];
-
-var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架" };
-
-function toCsv(rows, cols, map) {
-  function esc(v) {
-    var s = v == null ? "" : String(v);
-    // 字段内换行规范成 CRLF（RFC 4180），Excel 打开最稳
-    s = s.replace(/\r?\n/g, "\r\n");
-    return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
-  var lines = [cols.map(function (c) { return esc(c[1]); }).join(",")];
-  (rows || []).forEach(function (r) {
-    lines.push(cols.map(function (c) {
-      var raw = r[c[0]];
-      return esc(map ? map(raw, c[0], r) : raw);
-    }).join(","));
-  });
-  return lines.join("\r\n");
-}
+var SUB_COLS = csvLib.SUB_COLS;
+var PHOTO_COLS = csvLib.PHOTO_COLS;
+var STATUS_TEXT = csvLib.STATUS_TEXT;
+var toCsv = csvLib.toCsv;
 
 function sendCsv(req, res, filename, csv) {
   http.applyCors(req, res);
@@ -238,10 +203,19 @@ module.exports = async function (req, res) {
     /* ---------------- 导出投稿 CSV ---------------- */
     if (action === "export_photos") {
       var allPhotos = await db.photos.all();
-      sendCsv(req, res, "glimmer-photos.csv", toCsv(allPhotos, PHOTO_COLS, function (v, key) {
+      sendCsv(req, res, "glimmer-photos.csv", toCsv(allPhotos, PHOTO_COLS, function (v, key, row) {
         if (key === "status") return STATUS_TEXT[v] || v || "";
+        if (key === "exif") return csvLib.exifText(row.exif);
         return v;
       }));
+      return;
+    }
+
+    /* ---------------- 立即备份（写 COS _backup/ 目录，并推送通知） ---------------- */
+    if (action === "backup") {
+      var result = await backupLib.runBackup();
+      await notifyLib.backupDone(result);
+      http.json(req, res, 200, { ok: true, backup: result });
       return;
     }
 

@@ -3,6 +3,10 @@
     {
       "path": "/api/keepalive",
       "schedule": "0 3 * * 1"
+    },
+    {
+      "path": "/api/backup",
+      "schedule": "0 16 1 * *"
     }
   ],
   "regions": ["hkg1"]

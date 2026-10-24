@@ -9,6 +9,7 @@
 
   var G = window.Glimmer || {};
   var $ = G.$ || function (s, r) { return (r || document).querySelector(s); };
+  var EXIF = window.GlimmerEXIF;
 
   var MAX_EDGE = 1600;        // 压缩后最长边（网页展示足够）
   var TARGET_BYTES = 300 * 1024; // 目标体积 ≈300KB
@@ -20,6 +21,7 @@
 
   var fileInput = $("#f-file");
   var fileName = $("#file-name");
+  var exifHint = $("#exif-hint");
   var flow = $("#up-flow");
   var msg = $("#up-msg");
   var done = $("#up-done");
@@ -27,11 +29,27 @@
   var btn = $("#upload-btn");
   var origBox = $("#f-orig");
 
-  /* ---------------- 文件名回显 ---------------- */
+  /* ---------------- 文件名回显 + EXIF 预读 ---------------- */
   fileInput.addEventListener("change", function () {
     var f = fileInput.files && fileInput.files[0];
     fileName.textContent = f ? f.name : "未选择文件";
     fileName.classList.toggle("is-picked", !!f);
+    if (exifHint) { exifHint.hidden = true; exifHint.textContent = ""; }
+    if (!f || !EXIF) return;
+    /* 读拍摄参数：成功则在表单旁提示，失败静默（不影响投稿） */
+    EXIF.read(f).then(function (exif) {
+      if (!exifHint || !exif) {
+        if (exifHint && !exif && f) {
+          exifHint.hidden = false;
+          exifHint.textContent = "未读到拍摄参数（不影响投稿）";
+        }
+        return;
+      }
+      var parts = [exif.camera, exif.lens, exif.aperture, exif.shutter, exif.iso, exif.focal].filter(Boolean);
+      exifHint.hidden = false;
+      exifHint.textContent = "已读取拍摄参数：" + parts.join(" · ") +
+        (exif.shotAt ? " · 摄于 " + exif.shotAt : "") + "，将随作品一起提交";
+    });
   });
 
   /* ---------------- 流程步骤指示 ---------------- */
@@ -120,7 +138,6 @@
     var category = $("#f-cat").value;
     var title = $("#f-title").value.trim();
     var author = $("#f-author").value.trim();
-    var shot_date = $("#f-date").value;
     var file = fileInput.files && fileInput.files[0];
 
     if (!category) { showMsg("请先选择作品分类。", "is-err"); $("#f-cat").focus(); return; }
@@ -145,24 +162,30 @@
         return blob;
       })
 
-      /* 2) 经服务端上传并入库（同源，无跨域问题） */
+      /* 2) 经服务端上传并入库（同源，无跨域问题）。
+           EXIF 拍摄参数随查询参数一起提交；拍摄日期没填时用 EXIF 里的补上。 */
       .then(function (blob) {
         step("put", "on");
-        var qs = "api/upload?category=" + encodeURIComponent(category) +
-          "&title=" + encodeURIComponent(title) +
-          "&author=" + encodeURIComponent(author) +
-          (shot_date ? "&shot_date=" + encodeURIComponent(shot_date) : "");
-        return fetch(qs, {
-          method: "POST",
-          headers: { "Content-Type": "application/octet-stream" },
-          body: blob
-        })
-          .then(function (r) { return r.json().then(function (j) { return { http: r, j: j }; }); })
-          .then(function (o) {
-            if (!o.http.ok || !o.j.ok) throw new Error(o.j.error || "上传失败，请稍后重试");
-            step("put", "done");
-            return o.j;
-          });
+        var exifP = EXIF && file ? EXIF.read(file) : Promise.resolve(null);
+        return exifP.then(function (exif) {
+          var date = $("#f-date").value || (exif && exif.shotAt) || "";
+          var qs = "api/upload?category=" + encodeURIComponent(category) +
+            "&title=" + encodeURIComponent(title) +
+            "&author=" + encodeURIComponent(author) +
+            (date ? "&shot_date=" + encodeURIComponent(date) : "") +
+            (exif ? "&exif=" + encodeURIComponent(JSON.stringify(exif)) : "");
+          return fetch(qs, {
+            method: "POST",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: blob
+          })
+            .then(function (r) { return r.json().then(function (j) { return { http: r, j: j }; }); })
+            .then(function (o) {
+              if (!o.http.ok || !o.j.ok) throw new Error(o.j.error || "上传失败，请稍后重试");
+              step("put", "done");
+              return o.j;
+            });
+        });
       })
 
       .then(function (j) {

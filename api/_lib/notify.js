@@ -29,6 +29,7 @@ function photoSubmitted(p) {
     "标题：" + (p.title || "—"),
     "署名：" + (p.author || "匿名"),
     p.shot_date ? "拍摄日期：" + p.shot_date : "",
+    p.exif && p.exif.camera ? "机型：" + p.exif.camera : "",
     "",
     "请到管理后台审核：https://lityzglimmer.top/admin.html"
   ].filter(Boolean).join("\n");
@@ -48,6 +49,21 @@ function signupSubmitted(s) {
   return notify("新同学报名 · " + (s.name || ""), lines);
 }
 
+/* 备份完成通知 */
+function backupDone(result) {
+  var r = result || {};
+  var lines = [
+    "备份时间：" + new Date().toISOString(),
+    "作品记录：" + (r.photos != null ? r.photos : "—") + " 条",
+    "报名记录：" + (r.subs != null ? r.subs : "—") + " 条",
+    r.photosUrl ? "作品备份：" + r.photosUrl : "",
+    r.subsUrl ? "报名备份：" + r.subsUrl : "",
+    "",
+    "备份文件存放在 COS 的 _backup/ 目录，Supabase 项目万一被删也能找回数据"
+  ].filter(Boolean).join("\n");
+  return notify("月度备份完成 · " + (r.stamp || ""), lines);
+}
+
 /* 接口异常通知（500 路径用；按 IP 限 3 条/10 分钟，防止刷屏） */
 function errorOccurred(req, where, message) {
   if (!process.env.NOTIFY_URL) return Promise.resolve(false);
@@ -62,4 +78,4 @@ function errorOccurred(req, where, message) {
   return notify("接口异常 · " + where, lines);
 }
 
-module.exports = { notify: notify, photoSubmitted: photoSubmitted, signupSubmitted: signupSubmitted, errorOccurred: errorOccurred };
+module.exports = { notify: notify, photoSubmitted: photoSubmitted, signupSubmitted: signupSubmitted, backupDone: backupDone, errorOccurred: errorOccurred };

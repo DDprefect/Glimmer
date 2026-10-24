@@ -148,9 +148,10 @@
         sec.hidden = false;
         host.innerHTML = items.map(function (p, i) {
           var sub = p.author ? p.author + " · " + p.category : p.category;
+          var thumb = G.thumbUrl ? G.thumbUrl(p.file_url, 640) : p.file_url;
           return '<a class="latest-card" href="gallery.html#photo-' + p.id + '" style="--i:' + i + '">' +
             '<span class="latest-card__ph">' +
-              '<img src="' + G.esc(p.file_url) + '" alt="' + G.esc(p.title) + '" loading="lazy" decoding="async">' +
+              '<img src="' + G.esc(thumb) + '" alt="' + G.esc(p.title) + '" loading="lazy" decoding="async">' +
             "</span>" +
             '<span class="latest-card__meta">' +
               "<b>" + G.esc(p.title) + "</b>" +

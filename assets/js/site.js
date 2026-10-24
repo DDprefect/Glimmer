@@ -438,6 +438,17 @@
     });
   }
 
+  /* ---------------------------------------------------------- 作品缩图地址
+     COS 图片按宽度走数据万象缩放（?imageMogr2/thumbnail/<宽>x），
+     网格/后台只加载缩图，灯箱与放大才加载原图——移动端流量降一大截。
+     桶若未开通数据万象，该参数会被 COS 忽略、原样返回原图（安全降级，
+     页面不会坏）；本地静态图（相对路径）直接返回，不追加参数。 */
+  function thumbUrl(src, w) {
+    var s = String(src == null ? "" : src);
+    if (!s || s.indexOf("http") !== 0) return s;
+    return s + (s.indexOf("?") === -1 ? "?" : "&") + "imageMogr2/thumbnail/" + (w || 880) + "x";
+  }
+
   /* ---------------------------------------------------------- 作品卡片 */
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
@@ -505,7 +516,7 @@
     return (window.WORKS || []).filter(function (w) { return !w.hidden; });
   }
 
-  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM };
+  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM, thumbUrl: thumbUrl };
 
   /* 动态渲染出来的图片：调试/截图模式下立即加载，避免懒加载留白 */
   function eagerAll(root) {

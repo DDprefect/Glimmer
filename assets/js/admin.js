@@ -91,9 +91,14 @@
   }
 
   function metaLine(p) {
+    var exif = p.exif && typeof p.exif === "object" ? p.exif : null;
+    var exifPart = exif
+      ? " · " + [exif.camera, exif.aperture, exif.shutter, exif.iso].filter(Boolean).map(esc).join(" ")
+      : "";
     return esc(p.category) +
       (p.author ? " · " + esc(p.author) : "") +
       (p.shot_date ? " · 摄于 " + esc(p.shot_date) : "") +
+      exifPart +
       " · " + fmtTime(p.created_at);
   }
 
@@ -127,7 +132,8 @@
     }
     return '<article class="admin-item" data-id="' + p.id + '">' +
       sel +
-      '<img class="admin-item__img" src="' + esc(p.file_url) + '" alt="' + esc(p.title) + '" loading="lazy" decoding="async">' +
+      /* 列表加载缩图（数据万象），data-full 存原图供点击放大 */
+      '<img class="admin-item__img" src="' + esc(G.thumbUrl ? G.thumbUrl(p.file_url, 400) : p.file_url) + '" data-full="' + esc(p.file_url) + '" alt="' + esc(p.title) + '" loading="lazy" decoding="async">' +
       '<div class="admin-item__meta">' +
         "<h3>" + esc(p.title) + "</h3>" +
         "<p>" + metaLine(p) + "</p>" +
@@ -347,14 +353,28 @@
       .then(function () { btn.disabled = false; });
   });
 
+  /* 立即备份：服务端导出 CSV 写入 COS _backup/，成功后给出文件地址 */
+  $("#backup-now").addEventListener("click", function () {
+    var btn = this;
+    btn.disabled = true;
+    showMsg(panelMsg, "");
+    api("backup").then(function (j) {
+      var b = j.backup || {};
+      showMsg(panelMsg,
+        "备份完成（" + b.stamp + "）：作品 " + b.photos + " 条、报名 " + b.subs + " 条，已写入云端 _backup/ 目录。",
+        "is-ok");
+    }).catch(function (e) { errHandler(e); })
+      .then(function () { btn.disabled = false; });
+  });
+
   /* ---------------- 事件：作品卡片操作（事件委托） ---------------- */
   ["#pane-pending", "#pane-approved", "#pane-offline"].forEach(function (sel) {
     var pane = $(sel);
     if (!pane) return;
     pane.addEventListener("click", function (e) {
-      /* 点缩略图 → 宽版放大（审核看片用） */
+      /* 点缩略图 → 宽版放大（审核看片用，加载原图而非缩图） */
       if (e.target.classList && e.target.classList.contains("admin-item__img")) {
-        if (G.ZOOM) G.ZOOM.open(e.target.getAttribute("src"), true);
+        if (G.ZOOM) G.ZOOM.open(e.target.getAttribute("data-full") || e.target.getAttribute("src"), true);
         return;
       }
       var btn = e.target.closest ? e.target.closest("button[data-act]") : null;

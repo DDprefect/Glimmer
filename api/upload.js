@@ -4,7 +4,8 @@
    前端把压缩后的图片（原始二进制）POST 到本接口（同源，无跨域问题），
    由服务端签名后写入 COS，并登记作品信息（pending）。
    压缩仍在前端完成（最长边 1600 / 目标 ≤300KB），服务端只做转发。
-   元数据走查询参数：?category=..&title=..&author=..&shot_date=..
+   元数据走查询参数：?category=..&title=..&author=..&shot_date=..&exif=..
+   （exif 为可选的 JSON 拍摄参数，前端从原图解析，服务端白名单清洗）
    ========================================================================== */
 
 var http = require("./_lib/http");
@@ -12,6 +13,7 @@ var db = require("./_lib/supabase");
 var cos = require("./_lib/cos");
 var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
+var exifLib = require("./_lib/exif");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -20,6 +22,22 @@ var MIN_BYTES = 2 * 1024;        // 小于 2KB 不可能是正常照片
 var RL_MAX = 15;                 // 单 IP 10 分钟内最多 15 次（正常连拍一组也够）
 var RL_WINDOW = 10 * 60 * 1000;
 var GLOBAL_MAX = 30;             // 全局 10 分钟投稿熔断线
+
+/* 入库（带旧库兼容）：photos 表加上 exif 列之前，带 EXIF 的投稿会因
+   「列不存在」被 PostgREST 拒绝——这时去掉 exif 字段重试一次，
+   平滑升级，不让同学看到莫名其妙的失败。 */
+async function createPhoto(row) {
+  try {
+    return await db.photos.create(row);
+  } catch (e) {
+    if (row.exif && /exif|PGRST204|42703|schema cache/i.test(String(e.message || ""))) {
+      var slim = {};
+      Object.keys(row).forEach(function (k) { if (k !== "exif") slim[k] = row[k]; });
+      return await db.photos.create(slim);
+    }
+    throw e;
+  }
+}
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
@@ -57,6 +75,18 @@ module.exports = async function (req, res) {
     var author = http.clean(u.searchParams.get("author"), 30);
     var shot_date = http.clean(u.searchParams.get("shot_date"), 10);
 
+    /* EXIF 拍摄参数（可选）：前端从原图解析后随查询参数提交，
+       字段级白名单清洗，任何不合法内容一律丢弃，不影响投稿 */
+    var exif = null;
+    var exifRaw = u.searchParams.get("exif");
+    if (exifRaw) {
+      try {
+        exif = exifLib.cleanExif(JSON.parse(exifRaw));
+      } catch (e) {
+        exif = null; // 解析失败按无参数处理
+      }
+    }
+
     if (CATEGORIES.indexOf(category) === -1) {
       return http.json(req, res, 400, { ok: false, error: "分类不合法（仅限四个官方分类）" });
     }
@@ -91,11 +121,12 @@ module.exports = async function (req, res) {
     var fileUrl = cos.publicUrl(key);
     var photo = null;
     try {
-      var created = await db.photos.create({
+      var created = await createPhoto({
         category: category,
         title: title,
         author: author,
         shot_date: shot_date || null,
+        exif: exif,
         file_url: fileUrl,
         status: "pending"
       });

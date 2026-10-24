@@ -43,12 +43,26 @@
       title: p.title,
       author: p.author || "",
       src: p.file_url,
-      thumb: p.file_url,
+      /* 网格只加载缩图（数据万象按宽缩放），灯箱再用 src 原图 */
+      thumb: G.thumbUrl ? G.thumbUrl(p.file_url, 880) : p.file_url,
       sub: p.author ? p.category + " · " + p.author : p.category,
-      shot: p.shot_date ? { date: p.shot_date } : null,
+      shot: exifShot(p),
       ratio: 0,
       db: true
     };
+  }
+
+  /* 数据库存的 exif（投稿时从原图解析）→ 灯箱拍摄信息行字段；
+     没有 exif 的老数据退化为只显示拍摄日期 */
+  function exifShot(p) {
+    var e = p.exif;
+    if (!e || typeof e !== "object") return p.shot_date ? { date: p.shot_date } : null;
+    var shot = {};
+    ["camera", "lens", "aperture", "shutter", "iso", "focal"].forEach(function (k) {
+      if (e[k]) shot[k] = e[k];
+    });
+    shot.date = p.shot_date || e.shotAt || "";
+    return Object.keys(shot).length ? shot : null;
   }
 
   function boot() {

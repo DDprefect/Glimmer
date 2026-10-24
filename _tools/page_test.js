@@ -6,9 +6,10 @@
      node _tools/page_test.js
    覆盖：
      index/gallery  静态作品渲染 + gallery 合并数据库 approved 作品 + 计数
+                    + 数据万象缩图地址 + 灯箱 EXIF 拍摄信息
      join           报名提交字段映射 + 成功态 + 接口失败回退文本
-     upload         表单校验 + 接口链路（upload-token → PUT → photos）
-     admin          登录 401 / 进后台 / 审核 / 删除 / 导出 / 选项卡
+     upload         表单校验 + 接口链路（压缩 → api/upload 服务端转发）
+     admin          登录 401 / 进后台 / 审核 / 删除 / 导出 / 选项卡 / 备份按钮
    ========================================================================== */
 
 var path = require("path");
@@ -95,6 +96,7 @@ function baseStubs(window) {
 
 var DB_PHOTOS = [
   { id: 101, category: "校园纪实", title: "数据库新作·喊楼", author: "测试同学", shot_date: "2026-02-02",
+    exif: { camera: "NIKON ZR", lens: "NIKKOR Z 24-120mm f/4 S", aperture: "f/4", shutter: "1/50s", iso: "ISO 450", focal: "51mm" },
     file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/101.jpg", status: "approved", created_at: "2026-02-03T00:00:00Z" },
   { id: 102, category: "人像与视觉", title: "数据库新作·人像", author: "", shot_date: null,
     file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/人像与视觉/102.jpg", status: "approved", created_at: "2026-02-04T00:00:00Z" }
@@ -119,6 +121,7 @@ async function testGallery() {
   ok("网格首屏 15 张（分页加载）", cards.length === 15, String(cards.length));
   ok("数据库作品排在最前（2 张 data-autorate）", d.querySelectorAll('#works-grid img[data-autorate="1"]').length === 2);
   ok("数据库卡片 src 指向 COS", Array.prototype.some.call(d.querySelectorAll("#works-grid img"), function (im) { return /myqcloud/.test(im.getAttribute("src")); }));
+  ok("数据库卡片加载缩图（数据万象 880px）", Array.prototype.some.call(d.querySelectorAll("#works-grid img"), function (im) { return /imageMogr2\/thumbnail\/880x/.test(im.getAttribute("src")); }), Array.prototype.map.call(d.querySelectorAll("#works-grid img"), function (im) { return im.getAttribute("src"); }).join(" | ").slice(0, 200));
   ok("「本期展出」计数 = 76", d.querySelector("[data-count-works]").textContent === "76", d.querySelector("[data-count-works]").textContent);
   var campusBtn = Array.prototype.filter.call(d.querySelectorAll(".filter"), function (b) { return b.getAttribute("data-cat") === "campus"; })[0];
   ok("校园纪实筛选计数含数据库作品（27+1=28）", campusBtn.querySelector("b").textContent === "28", campusBtn.textContent);
@@ -145,6 +148,10 @@ async function testGallery() {
   await new Promise(function (r) { setTimeout(r, 350); }); // 等接口回来 + 深链应用 + 灯箱打开
   var lb = dom3.window.document.querySelector(".lb.is-open");
   ok("深链 #photo-101 → 灯箱打开且是数据库作品", !!lb && /myqcloud\.com/.test((lb.querySelector("img") || {}).getAttribute ? lb.querySelector("img").getAttribute("src") || "" : ""), lb ? "opened" : "not opened");
+  var exifLine = lb ? (lb.querySelector(".lb__exif") || {}).textContent || "" : "";
+  ok("灯箱展示 EXIF 拍摄参数", /NIKON ZR/.test(exifLine) && /f\/4/.test(exifLine) && /1\/50s/.test(exifLine) && /ISO 450/.test(exifLine) && /51mm/.test(exifLine), exifLine);
+  ok("灯箱拍摄信息含拍摄日期", /2026-02-02/.test(exifLine), exifLine);
+  ok("灯箱加载原图（非缩图）", !!lb && !/imageMogr2/.test(lb.querySelector("img").getAttribute("src") || ""), lb ? lb.querySelector("img").getAttribute("src") : "");
   dom.window.close(); dom2.window.close(); dom3.window.close();
 }
 
@@ -167,6 +174,7 @@ async function testIndex() {
   ok("首页精选区有作品卡片", works.length > 0, String(works.length));
   ok("最新收录区块显示", !d.getElementById("latest").hidden);
   ok("最新收录渲染 2 张卡", d.querySelectorAll("#latest-strip .latest-card").length === 2);
+  ok("最新收录加载缩图（640px）", /imageMogr2\/thumbnail\/640x/.test(d.querySelector("#latest-strip img").getAttribute("src")), d.querySelector("#latest-strip img").getAttribute("src"));
   ok("卡片链到作品深链", d.querySelector("#latest-strip .latest-card").getAttribute("href") === "gallery.html#photo-101");
 
   /* 接口失败 → 区块保持隐藏，不挡首页 */
@@ -305,6 +313,17 @@ async function testAdmin() {
       if (mode === "csv") {
         return Promise.resolve({ ok: true, status: 200, blob: function () { return Promise.resolve({}); } });
       }
+      if (b && b.action === "backup") {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: function () {
+            return Promise.resolve({
+              ok: true,
+              backup: { stamp: "2026-10", photos: 3, subs: 1, photosUrl: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/_backup/2026-10/photos-2026-10.csv", subsUrl: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/_backup/2026-10/submissions-2026-10.csv" }
+            });
+          }
+        });
+      }
       return Promise.resolve({
         ok: true, status: 200,
         json: function () {
@@ -338,11 +357,12 @@ async function testAdmin() {
   ok("统计数字渲染（1/1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-offline").textContent === "1" && d.getElementById("st-subs").textContent === "1");
   ok("待审核卡片渲染", /待审作品/.test(d.getElementById("pane-pending").textContent));
 
-  /* 缩略图点击放大（宽版浮层） */
+  /* 缩略图点击放大（宽版浮层，加载原图） */
   var thumb = d.querySelector("#pane-pending .admin-item__img");
+  ok("后台缩略图走缩图（400px）且 data-full 存原图", /imageMogr2\/thumbnail\/400x/.test(thumb.getAttribute("src")) && /myqcloud\.com\/校园纪实\/7\.jpg$/.test(thumb.getAttribute("data-full") || ""), thumb.getAttribute("src"));
   thumb.click();
   var zoomEl = d.querySelector(".zoom");
-  ok("点缩略图 → 宽版放大浮层打开", zoomEl && zoomEl.classList.contains("is-open") && zoomEl.classList.contains("zoom--wide") && zoomEl.querySelector("img").getAttribute("src") === thumb.getAttribute("src"), zoomEl ? zoomEl.className : "no zoom");
+  ok("点缩略图 → 宽版放大浮层打开（用原图）", zoomEl && zoomEl.classList.contains("is-open") && zoomEl.classList.contains("zoom--wide") && zoomEl.querySelector("img").getAttribute("src") === thumb.getAttribute("data-full"), zoomEl ? zoomEl.className : "no zoom");
   /* 关掉浮层，避免遮挡后续交互 */
   zoomEl.classList.remove("is-open");
 
@@ -420,6 +440,14 @@ async function testAdmin() {
   d.getElementById("export-csv").click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("导出走 export 动作", lastBody && lastBody.action === "export", JSON.stringify(lastBody));
+
+  /* 立即备份 */
+  callLog.length = 0;
+  mode = "ok";
+  d.getElementById("backup-now").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("立即备份 → 请求 backup 动作", callLog.some(function (b) { return b && b.action === "backup"; }), JSON.stringify(callLog));
+  ok("备份结果提示（stamp/条数）", /备份完成（2026-10）/.test(d.getElementById("panel-msg").textContent) && /作品 3 条/.test(d.getElementById("panel-msg").textContent), d.getElementById("panel-msg").textContent);
 
   ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
   dom.window.close();
