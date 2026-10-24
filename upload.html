@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作品投稿 · 柳铁一中微光摄影社</title>
+<meta name="description" content="微光摄影社作品投稿通道：选分类、填标题作者、传图，干部审核通过后即可出现在官网作品集。全部作品须为社员原创实拍。">
+<meta name="theme-color" content="#F7F2E9">
+<meta name="robots" content="noindex">
+<!-- ===== 分享预览 / SEO ===== -->
+<link rel="canonical" href="https://lityzglimmer.top/upload.html">
+<meta property="og:site_name" content="柳铁一中微光摄影社">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:url" content="https://lityzglimmer.top/upload.html">
+<meta property="og:title" content="作品投稿 · 柳铁一中微光摄影社">
+<meta property="og:description" content="选分类、填标题作者、传图，审核通过后即可出现在官网作品集。全部作品须为社员原创实拍。">
+<meta property="og:image" content="https://lityzglimmer.top/assets/img/brand/og-cover.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="微光摄影社 · 校园原创影像">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="作品投稿 · 柳铁一中微光摄影社">
+<meta name="twitter:description" content="选分类、填标题作者、传图，审核通过后即可出现在官网作品集。">
+<meta name="twitter:image" content="https://lityzglimmer.top/assets/img/brand/og-cover.jpg">
+<link rel="icon" href="assets/img/brand/mark.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+
+<body>
+<div data-nav></div>
+
+<header class="page-head wrap">
+  <span class="eyebrow eyebrow--red" data-reveal>Submit Works　作品投稿</span>
+  <h1 class="page-head__title" data-reveal>
+    让你的照片<br>
+    <span style="color:var(--red)">被看见</span>
+  </h1>
+  <p class="lede page-head__lede" data-reveal>
+    选好分类、填上标题与署名、上传图片，作品就会进入社团相册池。
+    干部审核通过后，它会出现在官网作品集里，署名你的名字。
+  </p>
+
+  <div class="infobar" data-reveal>
+    <div class="stat">
+      <span class="stat__n" style="font-size:clamp(1.5rem,2.8vw,2.1rem)">原创实拍</span>
+      <span class="stat__l">Original Only</span>
+    </div>
+    <div class="stat">
+      <span class="stat__n" style="font-size:clamp(1.5rem,2.8vw,2.1rem)">自动压缩</span>
+      <span class="stat__l">≈300KB 再上传</span>
+    </div>
+    <div class="stat">
+      <span class="stat__n" style="font-size:clamp(1.5rem,2.8vw,2.1rem)">干部审核</span>
+      <span class="stat__l">通过后上线</span>
+    </div>
+  </div>
+</header>
+
+<!-- ============================================================ 投稿表单 -->
+<section class="section" id="form" style="padding-top:clamp(28px,4vw,48px)">
+  <div class="wrap-n">
+    <div class="section-head" data-reveal>
+      <div>
+        <span class="eyebrow eyebrow--red">Upload　投稿</span>
+        <h2 class="h2" style="margin-top:18px">提交作品</h2>
+      </div>
+      <span class="section-head__no">01</span>
+    </div>
+
+    <div class="form" data-reveal>
+      <form id="upload-form" novalidate>
+        <div class="field">
+          <label for="f-cat">作品分类 <span style="color:var(--red)">*</span></label>
+          <select id="f-cat" name="category" required>
+            <option value="">请选择一个分类</option>
+            <option value="校园纪实">校园纪实</option>
+            <option value="校外采风">校外采风</option>
+            <option value="城市与远方">城市与远方</option>
+            <option value="人像与视觉">人像与视觉</option>
+          </select>
+        </div>
+
+        <div class="field--row">
+          <div class="field">
+            <label for="f-title">作品标题 <span style="color:var(--red)">*</span></label>
+            <input id="f-title" name="title" type="text" maxlength="50" placeholder="给这张照片起个名字" required>
+          </div>
+          <div class="field">
+            <label for="f-author">署名</label>
+            <input id="f-author" name="author" type="text" maxlength="30" placeholder="你的名字或昵称（可留空）">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="f-date">拍摄日期</label>
+          <input id="f-date" name="shot_date" type="date">
+        </div>
+
+        <div class="field">
+          <label for="f-file">选择图片 <span style="color:var(--red)">*</span></label>
+          <label class="filepick" for="f-file">
+            <input id="f-file" name="file" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" required>
+            <span class="filepick__btn">选择图片</span>
+            <span class="filepick__name" id="file-name">未选择文件</span>
+          </label>
+          <p class="field__hint">支持 JPG / PNG / WebP，原图多大都没关系——浏览器会先自动压缩到约 300KB 再上传，网页展示画质足够。原图请自己在手机或电脑里留存。</p>
+        </div>
+
+        <button class="btn" type="submit" id="upload-btn">提交作品 <span class="btn__arrow">→</span></button>
+        <p class="form__note">
+          提交后作品先进入「待审核」，干部看过没问题就会发布到作品集。
+          所有作品必须为社员原创实拍，禁止搬运他人图片。
+        </p>
+      </form>
+
+      <!-- 上传流程进度 -->
+      <ol class="up-flow" id="up-flow" hidden>
+        <li data-step="compress"><i>1</i><span>压缩图片</span></li>
+        <li data-step="token"><i>2</i><span>获取上传凭证</span></li>
+        <li data-step="put"><i>3</i><span>上传图片</span></li>
+        <li data-step="record"><i>4</i><span>提交作品信息</span></li>
+      </ol>
+
+      <div class="up-msg" id="up-msg" hidden role="status"></div>
+
+      <!-- 成功态 -->
+      <div class="up-done" id="up-done" hidden>
+        <img id="up-done-img" alt="已提交的作品预览">
+        <div>
+          <h3>已提交，等待审核</h3>
+          <p>作品已进入社团相册池。干部审核通过后，它会带着你的署名出现在官网作品集里。想再投一张？<a href="upload.html">继续投稿</a>，或去<a href="gallery.html">作品集</a>看看大家拍的。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div data-foot></div>
+
+<script src="assets/js/site.js"></script>
+<script src="assets/js/upload.js"></script>
+</body>
+</html>

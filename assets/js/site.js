@@ -444,15 +444,19 @@
   }
 
   function workCard(item, i, delay) {
-    // 原始比例做温和钳制：避免超宽/超高的图把网格参差拉得过大
-    var ar = Math.min(1.6, Math.max(0.8, item.ratio || 1.5));
+    // 原始比例做温和钳制：避免超宽/超高的图把网格参差拉得过大。
+    // 无 ratio 的条目（数据库投稿，前端未知尺寸）先按 3:2 占位，
+    // 打上 data-autorate，图片载入后按真实比例纠正（见 bindCards）。
+    var hasRatio = !!item.ratio;
+    var ar = hasRatio ? Math.min(1.6, Math.max(0.8, item.ratio)) : 1.5;
     var h = Math.max(1, Math.round(880 / ar));
     return '<button class="work" type="button" data-i="' + i + '" ' +
              'style="--ar:' + ar + ";animation-delay:" + ((delay || 0) + Math.min(i, 12) * 45) + 'ms" ' +
              'aria-label="查看作品：' + esc(item.title) + '">' +
              '<span class="work__ph">' +
                '<img src="' + item.thumb + '" alt="' + esc(item.title + " · " + item.group) + '" ' +
-                 'loading="lazy" decoding="async" width="880" height="' + h + '">' +
+                 'loading="lazy" decoding="async" width="880" height="' + h + '"' +
+                 (hasRatio ? "" : ' data-autorate="1"') + ">" +
                '<span class="work__zoom" aria-hidden="true">' +
                  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                    '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6M11 8v6M8 11h6"/></svg>' +
@@ -472,6 +476,22 @@
       c.addEventListener("click", function () {
         LB.open(items, parseInt(c.getAttribute("data-i"), 10) || 0);
       });
+    });
+
+    /* 无比例信息的图（数据库投稿）：载入后按 naturalWidth/Height 设 --ar，
+       并同步宽高属性，避免瀑布流网格被拉伸或留白 */
+    $$("img[data-autorate]", root).forEach(function (im) {
+      var fix = function () {
+        var w = im.naturalWidth, h = im.naturalHeight;
+        if (!w || !h) return;
+        var ar = Math.min(1.6, Math.max(0.8, w / h));
+        var card = im.closest ? im.closest(".work") : null;
+        if (card) card.style.setProperty("--ar", ar);
+        im.width = 880;
+        im.height = Math.max(1, Math.round(880 / ar));
+      };
+      if (im.complete && im.naturalWidth) fix();
+      else im.addEventListener("load", fix);
     });
   }
 

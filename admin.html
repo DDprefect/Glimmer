@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理后台 · 柳铁一中微光摄影社</title>
+<meta name="description" content="微光摄影社管理后台：审核作品、删除作品、查看与导出新生报名。">
+<meta name="theme-color" content="#F7F2E9">
+<meta name="robots" content="noindex">
+<link rel="icon" href="assets/img/brand/mark.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=Inter:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+
+<body>
+<div data-nav></div>
+
+<header class="page-head wrap">
+  <span class="eyebrow eyebrow--red" data-reveal>Admin　管理后台</span>
+  <h1 class="page-head__title" data-reveal>
+    作品审核<br>
+    <span style="color:var(--red)">与报名管理</span>
+  </h1>
+  <p class="lede page-head__lede" data-reveal>
+    仅限社长与干部使用。输入管理密码后，可审核同学投稿、下架已发布作品、查看并导出新生报名。
+  </p>
+</header>
+
+<!-- ============================================================ 登录 -->
+<section class="section" id="login" style="padding-top:clamp(28px,4vw,48px)">
+  <div class="wrap-n">
+    <div class="admin-login" data-reveal>
+      <form id="admin-login-form" novalidate>
+        <div class="field">
+          <label for="f-pw">管理密码</label>
+          <input id="f-pw" name="password" type="password" placeholder="只有干部知道的那句话" required autocomplete="current-password">
+        </div>
+        <button class="btn" type="submit">进入后台 <span class="btn__arrow">→</span></button>
+        <div class="up-msg" id="login-msg" hidden role="status"></div>
+        <p class="form__note">
+          密码由社长设定，仅存放在服务端环境变量中；更换干部后可在 Vercel 后台随时修改。
+          本页面不会被搜索引擎收录。
+        </p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 后台面板 -->
+<section class="section" id="panel" hidden style="padding-top:clamp(28px,4vw,48px)">
+  <div class="wrap-n">
+    <div class="admin-bar">
+      <div class="admin-stats">
+        <span class="admin-stat"><b id="st-pending">0</b>待审核</span>
+        <span class="admin-stat"><b id="st-approved">0</b>已发布</span>
+        <span class="admin-stat"><b id="st-subs">0</b>条报名</span>
+      </div>
+      <button class="btn btn--ghost btn--sm" type="button" id="admin-logout">退出登录</button>
+    </div>
+
+    <div class="admin-tabs" role="tablist">
+      <button class="admin-tab is-on" type="button" data-tab="pending" role="tab">待审核 <b id="tab-pending">0</b></button>
+      <button class="admin-tab" type="button" data-tab="approved" role="tab">已发布 <b id="tab-approved">0</b></button>
+      <button class="admin-tab" type="button" data-tab="subs" role="tab">报名列表 <b id="tab-subs">0</b></button>
+    </div>
+
+    <div class="up-msg" id="panel-msg" hidden role="status"></div>
+
+    <!-- 待审核 -->
+    <div class="admin-pane is-on" id="pane-pending"></div>
+
+    <!-- 已发布 -->
+    <div class="admin-pane" id="pane-approved"></div>
+
+    <!-- 报名 -->
+    <div class="admin-pane" id="pane-subs">
+      <div class="admin-subs-bar">
+        <p class="admin-subs-tip">报名按提交时间倒序；导出文件为 CSV（带 BOM，Excel 可直接打开）。</p>
+        <button class="btn btn--sm" type="button" id="export-csv">导出报名 CSV</button>
+      </div>
+      <div class="admin-table-wrap" id="subs-table"></div>
+    </div>
+  </div>
+</section>
+
+<div data-foot></div>
+
+<script src="assets/js/site.js"></script>
+<script src="assets/js/admin.js"></script>
+</body>
+</html>

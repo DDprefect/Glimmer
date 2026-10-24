@@ -119,8 +119,8 @@
       </div>
       <div class="step" data-reveal style="--d:70ms;border-top-color:var(--gold-soft)">
         <span class="step__no">STEP 02</span>
-        <h3>提交给招新负责人</h3>
-        <p>把生成的报名信息发送给社团招新负责人（QQ / 微信 / 抖音私信均可）。</p>
+        <h3>提交到报名库</h3>
+        <p>点击提交即可，报名信息直接进入社团报名库，无需再手动转发给任何人。</p>
       </div>
       <div class="step" data-reveal style="--d:140ms;border-top-color:var(--gold-soft)">
         <span class="step__no">STEP 03</span>
@@ -192,13 +192,25 @@
           <textarea id="f-msg" name="msg" placeholder="喜欢拍什么？想学什么？或者随便聊两句。"></textarea>
         </div>
 
-        <button class="btn" type="submit">生成报名信息 <span class="btn__arrow">→</span></button>
+        <button class="btn" type="submit" id="join-submit">提交报名 <span class="btn__arrow">→</span></button>
         <p class="form__note">
-          本页为静态网站，表单不会自动上传。点击后会生成一段文本，复制后发送给社团招新负责人即可完成报名。
+          提交后报名信息直接进入社团报名库，招新负责人会尽快通过你留下的联系方式与你联系。
         </p>
 
+        <div id="join-ok" hidden style="margin-top:28px;padding:24px;border:1px solid var(--line);border-left:3px solid #3F7D4E;border-radius:var(--r-lg);background:rgba(63,125,78,.07)">
+          <h3 style="font-family:var(--serif);font-size:1.1rem;margin:0 0 10px">报名成功</h3>
+          <p style="margin:0;font-size:.88rem;line-height:1.9;color:var(--ink-2)">
+            你的信息已提交到社团报名库。招新负责人会尽快通过你留下的联系方式与你联系，
+            请留意 QQ / 微信 / 电话。期待在微光见到你。
+          </p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:16px">
+            <a class="btn btn--sm btn--ghost" href="gallery.html">先看看大家拍的</a>
+            <a class="btn btn--sm btn--ghost" href="upload.html">直接投稿一张作品</a>
+          </div>
+        </div>
+
         <div id="join-result" hidden style="margin-top:28px">
-          <label for="f-out">复制下面这段内容，发给社团招新负责人</label>
+          <label for="f-out">网络异常，请复制下面这段内容，发给社团招新负责人</label>
           <textarea id="f-out" readonly style="min-height:180px;font-family:var(--mono);font-size:.82rem;line-height:1.85"></textarea>
           <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
             <button class="btn btn--sm" type="button" id="copy-btn">复制报名信息</button>
@@ -308,30 +320,70 @@
   var out = document.getElementById("f-out");
   var box = document.getElementById("join-result");
   var tip = document.getElementById("copy-tip");
+  var okBox = document.getElementById("join-ok");
+  var btn = document.getElementById("join-submit");
+
+  function buildPayload() {
+    var dirs = Array.prototype.map.call(form.querySelectorAll('input[name="dir"]:checked'), function (i) { return i.value; });
+    var equip = document.getElementById("f-equip").value;
+    var msg = document.getElementById("f-msg").value.trim();
+    var intro = (equip ? "拍摄设备：" + equip + "。" : "") + (msg || "");
+    return {
+      name: document.getElementById("f-name").value.trim(),
+      class: document.getElementById("f-class").value.trim(),
+      contact: document.getElementById("f-contact").value.trim(),
+      interest: dirs.join("、"),
+      intro: intro.trim()
+    };
+  }
+
+  function buildText(p) {
+    var dirs = p.interest || "还在探索";
+    return [
+      "【微光摄影社 · 入社报名】",
+      "姓名/昵称：" + p.name,
+      "年级班级：" + (p.class || "—"),
+      "联系方式：" + p.contact,
+      "感兴趣的方向：" + dirs,
+      "想说的话：" + (p.intro || "—"),
+      "",
+      "—— 发送自微光摄影社官方网站"
+    ].join("\n");
+  }
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
-    var name = document.getElementById("f-name").value.trim();
-    var contact = document.getElementById("f-contact").value.trim();
-    if (!name) { document.getElementById("f-name").focus(); return; }
-    if (!contact) { document.getElementById("f-contact").focus(); return; }
+    var p = buildPayload();
+    if (!p.name) { document.getElementById("f-name").focus(); return; }
+    if (!p.contact) { document.getElementById("f-contact").focus(); return; }
 
-    var dirs = Array.prototype.map.call(form.querySelectorAll('input[name="dir"]:checked'), function (i) { return i.value; });
-    var lines = [
-      "【微光摄影社 · 入社报名】",
-      "姓名/昵称：" + name,
-      "年级班级：" + (document.getElementById("f-class").value.trim() || "—"),
-      "联系方式：" + contact,
-      "感兴趣的方向：" + (dirs.length ? dirs.join("、") : "还在探索"),
-      "现有设备：" + document.getElementById("f-equip").value,
-      "想说的话：" + (document.getElementById("f-msg").value.trim() || "—"),
-      "",
-      "—— 发送自微光摄影社官方网站"
-    ];
-    out.value = lines.join("\n");
-    box.hidden = false;
-    tip.textContent = "";
-    box.scrollIntoView({ behavior: "smooth", block: "center" });
+    btn.disabled = true;
+    fetch("api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(p)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j && j.ok) {
+          /* 入库成功：显示成功态，隐藏表单其余部分 */
+          form.querySelectorAll(".field, .field--row, .checks, button[type=submit], .form__note").forEach(function (el) {
+            el.style.display = "none";
+          });
+          okBox.hidden = false;
+          okBox.scrollIntoView({ behavior: "smooth", block: "center" });
+          return;
+        }
+        throw new Error((j && j.error) || "提交失败");
+      })
+      .catch(function () {
+        /* 接口不可用（本地打开 / 数据库暂停）：回退为「生成文本手动转发」 */
+        out.value = buildText(p);
+        box.hidden = false;
+        tip.textContent = "网络不稳定，已改为生成文本，请复制后发给招新负责人";
+        box.scrollIntoView({ behavior: "smooth", block: "center" });
+      })
+      .then(function () { btn.disabled = false; });
   });
 
   document.getElementById("copy-btn").addEventListener("click", function () {

@@ -1,0 +1,321 @@
+"use strict";
+/* ==========================================================================
+   微光摄影社 · 页面级冒烟测试（jsdom）
+   用法：
+     NODE_PATH=C:/Users/兜/.workbuddy/binaries/node/workspace/node_modules \
+     node _tools/page_test.js
+   覆盖：
+     index/gallery  静态作品渲染 + gallery 合并数据库 approved 作品 + 计数
+     join           报名提交字段映射 + 成功态 + 接口失败回退文本
+     upload         表单校验 + 接口链路（upload-token → PUT → photos）
+     admin          登录 401 / 进后台 / 审核 / 删除 / 导出 / 选项卡
+   ========================================================================== */
+
+var path = require("path");
+var fs = require("fs");
+var { JSDOM, VirtualConsole, requestInterceptor } = require("jsdom");
+
+var ROOT = path.join(__dirname, "..");
+
+/* 本地资源拦截器：页面跑在 https://lityzglimmer.top 源下（与生产一致，
+   sessionStorage / isSecureContext 等行为才真实），脚本与样式映射到本地文件，
+   其它外链（Google Fonts 等）返回空响应，不打网络。 */
+var localInterceptor = requestInterceptor(async function (request) {
+  var m = /^https:\/\/lityzglimmer\.top\/(.*)$/.exec(request.url);
+  if (!m) return new Response("", { status: 200, headers: { "Content-Type": "text/plain" } });
+  var local = path.join(ROOT, decodeURIComponent(m[1])).replace(/\\/g, "/");
+  var ext = path.extname(local).toLowerCase();
+  var type = ext === ".js" ? "text/javascript" : ext === ".css" ? "text/css" : "application/octet-stream";
+  try {
+    return new Response(fs.readFileSync(local), { headers: { "Content-Type": type } });
+  } catch (e) {
+    return new Response("", { status: 404, headers: { "Content-Type": "text/plain" } });
+  }
+});
+var PASS = 0, FAIL = 0;
+function ok(name, cond, extra) {
+  if (cond) { PASS++; console.log("  ✓ " + name); }
+  else { FAIL++; console.log("  ✗ " + name + (extra ? "  → " + extra : "")); }
+}
+
+function loadPage(file, beforeParse) {
+  var html = fs.readFileSync(path.join(ROOT, file), "utf8");
+  var vc = new VirtualConsole(); // 吞掉 jsdom 的 canvas not implemented 等噪音
+  vc.on("jsdomError", function (e) {
+    var d = e.detail || e;
+    console.log("    [jsdomError] " + (d && d.message ? d.message : d));
+  });
+  var dom = new JSDOM(html, {
+    url: "https://lityzglimmer.top/" + file, // 与生产同源，存储/安全上下文行为真实
+    runScripts: "dangerously",
+    resources: { interceptors: [localInterceptor] },
+    pretendToBeVisual: true,
+    virtualConsole: vc,
+    beforeParse: beforeParse || function (window) { baseStubs(window); }
+  });
+  /* 确定性等待：轮询到站点脚本启动完成（.nav 注入即 boot 完成），
+     不依赖 load 事件（外链字体资源会让 jsdom 的 load 时快时慢） */
+  return new Promise(function (resolve) {
+    var t0 = Date.now();
+    (function poll() {
+      var nav = dom.window.document.querySelector(".nav");
+      if (nav || Date.now() - t0 > 5000) {
+        setTimeout(function () { resolve(dom); }, 120);
+      } else {
+        setTimeout(poll, 20);
+      }
+    })();
+  });
+}
+
+/* 公共打桩： IntersectionObserver / matchMedia / scrollIntoView */
+function baseStubs(window) {
+  if (!window.IntersectionObserver) {
+    window.IntersectionObserver = function () {
+      return { observe: function () {}, unobserve: function () {}, disconnect: function () {} };
+    };
+  }
+  if (!window.matchMedia) {
+    window.matchMedia = function () {
+      return { matches: false, addListener: function () {}, removeListener: function () {},
+               addEventListener: function () {}, removeEventListener: function () {} };
+    };
+  }
+  if (!window.HTMLElement.prototype.scrollIntoView) {
+    window.HTMLElement.prototype.scrollIntoView = function () {};
+  }
+}
+
+var DB_PHOTOS = [
+  { id: 101, category: "校园纪实", title: "数据库新作·喊楼", author: "测试同学", shot_date: "2026-02-02",
+    file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/101.jpg", status: "approved", created_at: "2026-02-03T00:00:00Z" },
+  { id: 102, category: "人像与视觉", title: "数据库新作·人像", author: "", shot_date: null,
+    file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/人像与视觉/102.jpg", status: "approved", created_at: "2026-02-04T00:00:00Z" }
+];
+
+/* ======================================================================== */
+async function testGallery() {
+  console.log("\n[gallery] 静态 + 数据库合并");
+  var calls = [];
+  var dom = await loadPage("gallery.html", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      calls.push(url);
+      return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS }); } });
+    };
+  });
+  var d = dom.window.document;
+
+  ok("请求了 api/photos", calls.indexOf("api/photos") !== -1);
+  var cards = d.querySelectorAll("#works-grid .work");
+  // 注意 gallery 是 15 张/页的分步加载，首页只渲染前 15 张
+  ok("网格首屏 15 张（分页加载）", cards.length === 15, String(cards.length));
+  ok("数据库作品排在最前（2 张 data-autorate）", d.querySelectorAll('#works-grid img[data-autorate="1"]').length === 2);
+  ok("数据库卡片 src 指向 COS", Array.prototype.some.call(d.querySelectorAll("#works-grid img"), function (im) { return /myqcloud/.test(im.getAttribute("src")); }));
+  ok("「本期展出」计数 = 76", d.querySelector("[data-count-works]").textContent === "76", d.querySelector("[data-count-works]").textContent);
+  var campusBtn = Array.prototype.filter.call(d.querySelectorAll(".filter"), function (b) { return b.getAttribute("data-cat") === "campus"; })[0];
+  ok("校园纪实筛选计数含数据库作品（27+1=28）", campusBtn.querySelector("b").textContent === "28", campusBtn.textContent);
+  var portraitBtn = Array.prototype.filter.call(d.querySelectorAll(".filter"), function (b) { return b.getAttribute("data-cat") === "portrait"; })[0];
+  ok("人像与视觉筛选计数含数据库作品", parseInt(portraitBtn.querySelector("b").textContent, 10) > 0, portraitBtn.textContent);
+  ok("投稿入口已加入 gallery", !!d.querySelector('a[href="upload.html"]'));
+
+  /* 接口失败降级 */
+  var dom2 = await loadPage("gallery.html", function (window) {
+    baseStubs(window);
+    window.fetch = function () { return Promise.reject(new Error("network")); };
+  });
+  var cards2 = dom2.window.document.querySelectorAll("#works-grid .work");
+  ok("接口失败时仍渲染静态作品首屏 15 张（不白屏）", cards2.length === 15, String(cards2.length));
+  ok("接口失败时无 data-autorate 卡片", dom2.window.document.querySelectorAll('#works-grid img[data-autorate="1"]').length === 0);
+  dom.window.close(); dom2.window.close();
+}
+
+/* ======================================================================== */
+async function testIndex() {
+  console.log("\n[index] 首页无回归");
+  var dom = await loadPage("index.html");
+  var d = dom.window.document;
+  ok("首页导航已注入", !!d.querySelector(".nav"));
+  ok("首页页脚已注入", !!d.querySelector(".foot"));
+  var works = d.querySelectorAll(".work");
+  ok("首页精选区有作品卡片", works.length > 0, String(works.length));
+  dom.window.close();
+}
+
+/* ======================================================================== */
+async function testJoin() {
+  console.log("\n[join] 报名提交");
+
+  /* 场景 1：接口正常 → 入库成功态 */
+  var payload = null;
+  var dom = await loadPage("join.html", function (window) {
+    baseStubs(window);
+    window.fetch = function (url, opts) {
+      if (url === "api/register") {
+        payload = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
+    };
+  });
+  var d = dom.window.document;
+  d.getElementById("f-name").value = "小雨";
+  d.getElementById("f-class").value = "高一 5 班";
+  d.getElementById("f-contact").value = "QQ 123456";
+  d.getElementById("f-equip").value = "手机";
+  d.getElementById("f-msg").value = "喜欢拍晚霞";
+  d.querySelector('input[name="dir"][value="人像"]').checked = true;
+  d.querySelector('input[name="dir"][value="后期"]').checked = true;
+  d.getElementById("join-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+
+  ok("POST 了 api/register", payload !== null);
+  ok("字段映射：name/class/contact 正确", payload && payload.name === "小雨" && payload["class"] === "高一 5 班" && payload.contact === "QQ 123456");
+  ok("字段映射：多选 interest 合并", payload && payload.interest === "人像、后期", payload && payload.interest);
+  ok("字段映射：设备与想说的话进 intro", payload && /拍摄设备：手机/.test(payload.intro) && /晚霞/.test(payload.intro), payload && payload.intro);
+  ok("成功后显示报名成功卡", !d.getElementById("join-ok").hidden);
+  ok("表单项已隐藏", d.getElementById("f-name").closest(".field").style.display === "none");
+
+  /* 场景 2：接口失败 → 回退生成文本 */
+  var dom2 = await loadPage("join.html", function (window) {
+    baseStubs(window);
+    window.fetch = function () { return Promise.reject(new Error("network")); };
+  });
+  var d2 = dom2.window.document;
+  d2.getElementById("f-name").value = "离线同学";
+  d2.getElementById("f-contact").value = "微信 xx";
+  d2.getElementById("join-form").dispatchEvent(new dom2.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("接口失败时回退文本生成", !d2.getElementById("join-result").hidden && /离线同学/.test(d2.getElementById("f-out").value));
+  ok("回退提示已显示", /网络不稳定/.test(d2.getElementById("copy-tip").textContent));
+  ok("STEP 02 文案已改为提交到报名库", /提交到报名库/.test(d2.body.textContent));
+  dom.window.close(); dom2.window.close();
+}
+
+/* ======================================================================== */
+async function testUpload() {
+  console.log("\n[upload] 投稿页");
+  var dom = await loadPage("upload.html");
+  var d = dom.window.document;
+  ok("分类四值齐全", d.querySelectorAll("#f-cat option").length === 5); // 含占位
+  ok("表单关键字段在位", !!d.getElementById("f-title") && !!d.getElementById("f-file"));
+  ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
+
+  /* 缺文件 → 校验提示，不发请求 */
+  var reqs = [];
+  dom.window.fetch = function (url, opts) {
+    reqs.push(url);
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true }); } });
+  };
+  d.getElementById("f-cat").value = "校园纪实";
+  d.getElementById("f-title").value = "测试投稿";
+  d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 50); });
+  ok("未选图时给出提示且不发请求", reqs.length === 0 && /选择要上传的图片/.test(d.getElementById("up-msg").textContent));
+
+  /* 接口链路（压缩步骤在 jsdom 无 canvas 会 graceful 失败，验证不死页） */
+  var fakeFile = new dom.window.File([new Uint8Array([1, 2, 3])], "t.jpg", { type: "image/jpeg" });
+  Object.defineProperty(d.getElementById("f-file"), "files", { value: [fakeFile], configurable: true });
+  d.getElementById("upload-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 150); });
+  ok("canvas 缺失时优雅报错（不白屏）", !d.getElementById("up-msg").hidden && d.getElementById("upload-btn").disabled === false,
+     d.getElementById("up-msg").textContent);
+  dom.window.close();
+}
+
+/* ======================================================================== */
+async function testAdmin() {
+  console.log("\n[admin] 管理后台");
+
+  var lastBody = null;
+  var callLog = [];
+  var mode = "ok";
+  var dom = await loadPage("admin.html", function (window) {
+    baseStubs(window);
+    window.fetch = function (url, opts) {
+      var b = opts && opts.body ? JSON.parse(opts.body) : null;
+      lastBody = b;
+      callLog.push(b);
+      if (mode === "401") {
+        return Promise.resolve({ ok: false, status: 401, json: function () { return Promise.resolve({ ok: false, error: "密码不正确" }); } });
+      }
+      if (mode === "csv") {
+        return Promise.resolve({ ok: true, status: 200, blob: function () { return Promise.resolve({}); } });
+      }
+      return Promise.resolve({
+        ok: true, status: 200,
+        json: function () {
+          return Promise.resolve({
+            ok: true,
+            pending: [{ id: 7, category: "校园纪实", title: "待审作品", author: "同学甲", shot_date: "2026-02-01", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/7.jpg", status: "pending", created_at: "2026-02-02T00:00:00Z" }],
+            approved: [{ id: 8, category: "城市与远方", title: "已发作品", author: "同学乙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/城市与远方/8.jpg", status: "approved", created_at: "2026-02-01T00:00:00Z" }],
+            submissions: [{ id: 1, name: "报名人", class: "高一1班", contact: "QQ 1", interest: "人像", intro: "嗨", created_at: "2026-02-01T00:00:00Z" }]
+          });
+        }
+      });
+    };
+  });
+  var d = dom.window.document;
+
+  /* 401 场景 */
+  mode = "401";
+  d.getElementById("f-pw").value = "错密码";
+  d.getElementById("admin-login-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 60); });
+  ok("错密码 → 401 提示，面板不显示", /密码不正确/.test(d.getElementById("login-msg").textContent) && d.getElementById("panel").hidden);
+
+  /* 正确密码进后台 */
+  mode = "ok";
+  d.getElementById("f-pw").value = "glimmer2026";
+  d.getElementById("admin-login-form").dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("登录后面板显示", !d.getElementById("panel").hidden);
+  ok("密码存入了 sessionStorage", dom.window.sessionStorage.getItem("glimmer_admin_pw") === "glimmer2026");
+  ok("统计数字渲染（1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-subs").textContent === "1");
+  ok("待审核卡片渲染", /待审作品/.test(d.getElementById("pane-pending").textContent));
+
+  /* 审核通过 */
+  var approveBtn = d.querySelector('#pane-pending button[data-act="approve"]');
+  callLog.length = 0;
+  approveBtn.click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点击通过 → 请求 approve 动作", callLog.some(function (b) { return b && b.action === "approve" && String(b.id) === "7"; }), JSON.stringify(callLog));
+
+  /* 删除（confirm 打桩） */
+  dom.window.confirm = function () { return true; };
+  var delBtn = d.querySelector('#pane-pending button[data-act="remove"]');
+  callLog.length = 0;
+  delBtn.click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点击删除 → 请求 delete 动作", callLog.some(function (b) { return b && b.action === "delete" && String(b.id) === "7"; }), JSON.stringify(callLog));
+
+  /* 选项卡切换 */
+  var subsTab = d.querySelector('.admin-tab[data-tab="subs"]');
+  subsTab.click();
+  ok("报名选项卡可见且含导出按钮", d.getElementById("pane-subs").classList.contains("is-on") && !!d.getElementById("export-csv"));
+  ok("报名表格渲染", /报名人/.test(d.getElementById("subs-table").textContent));
+
+  /* 导出 */
+  mode = "csv";
+  d.getElementById("export-csv").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("导出走 export 动作", lastBody && lastBody.action === "export", JSON.stringify(lastBody));
+
+  ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
+  dom.window.close();
+}
+
+/* ======================================================================== */
+(async function () {
+  await testIndex();
+  await testGallery();
+  await testJoin();
+  await testUpload();
+  await testAdmin();
+  console.log("\n=========================================");
+  console.log("结果：" + PASS + " 通过 / " + FAIL + " 失败");
+  process.exit(FAIL ? 1 : 0);
+})().catch(function (e) {
+  console.error("测试脚本异常：", e);
+  process.exit(1);
+});
