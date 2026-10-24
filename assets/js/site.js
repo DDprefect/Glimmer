@@ -22,22 +22,19 @@
     { href: "join.html",    label: "加入微光", en: "Join"  }
   ];
 
-  /* ---------------------------------------------------------- 招新状态条
-     首页顶部那条提示。改这里的配置即可切换「招新中 / 已结束 / 不显示」，
-     不用动页面结构——干部自己就能维护。
-       show  总开关：false 则整条不出现
-       open  true=招新中（引导去报名），false=已结束（引导加群等通知） */
+  /* ---------------------------------------------------------- 招新状态胶囊
+     首页首屏 kicker 那一行的小胶囊（不是整条横带——横条会把画面切断）。
+     改这里的配置即可切换「招新中 / 已结束 / 不显示」，不用动页面结构。
+       show  总开关：false 则胶囊不出现
+       open  true=招新中（点了去报名），false=已结束（点了去加群等通知）
+     文案尽量短，胶囊一行放得下才不抢画面。 */
   var RECRUIT = {
     show: true,
     open: true,
-    openText: "2026 秋季招新进行中",
-    openNote: "不设门槛 · 不唯设备 · 不限基础",
+    openText: "秋季招新进行中",
     openLink: "join.html#form",
-    openCta: "去填报名信息",
-    closeText: "本轮招新已结束",
-    closeNote: "下一轮预计在下学期初启动，先加官方 QQ 群等通知",
-    closeLink: "share.html",
-    closeCta: "去加官方 QQ 群"
+    closeText: "本轮招新已结束 · 加群等通知",
+    closeLink: "share.html"
   };
 
   var $  = function (s, r) { return (r || document).querySelector(s); };
@@ -214,34 +211,16 @@
      只有首页有 <div id="rbar"> 这个挂载点，其它页面自动跳过。
      招新中：一条深色提示，点右边按钮直接滚到报名表单；
      已结束：导流到官方 QQ 群，别让同学空手而归。 */
-  /* 把招新条的实际高度写进 CSS 变量 --rbar-h：Hero 靠它把负 margin
-     多算一段，顶部才不会露出纸色底（否则导航白字压在浅底上看不清）。
-     字体加载后行高可能再变一点，稍后补测一次。 */
-  function syncRbarH(el) {
-    var set = function () {
-      var h = el.offsetHeight || 0;
-      if (h) document.documentElement.style.setProperty("--rbar-h", h + "px");
-    };
-    set();
-    setTimeout(set, 400);
-  }
-
   function renderRecruit() {
     var el = $("#rbar");
     if (!el || !RECRUIT.show) return;
     var open = !!RECRUIT.open;
     el.hidden = false;
-    el.className = "rbar" + (open ? " rbar--open" : " rbar--closed");
-    document.body.classList.add("has-rbar");
     el.innerHTML =
-      '<div class="wrap rbar__inner">' +
-        '<span class="rbar__dot" aria-hidden="true"></span>' +
-        '<span class="rbar__txt"><b>' + esc(open ? RECRUIT.openText : RECRUIT.closeText) + "</b>" +
-          "<em>" + esc(open ? RECRUIT.openNote : RECRUIT.closeNote) + "</em></span>" +
-        '<a class="rbar__cta" href="' + (open ? RECRUIT.openLink : RECRUIT.closeLink) + '">' +
-          esc(open ? RECRUIT.openCta : RECRUIT.closeCta) + " →</a>" +
-      "</div>";
-    syncRbarH(el);
+      '<a class="hero__recruit" href="' + (open ? RECRUIT.openLink : RECRUIT.closeLink) + '">' +
+        '<i aria-hidden="true"></i>' + esc(open ? RECRUIT.openText : RECRUIT.closeText) +
+        "<span aria-hidden=\"true\">→</span>" +
+      "</a>";
   }
 
   /* ---------------------------------------------------------- 复制文本

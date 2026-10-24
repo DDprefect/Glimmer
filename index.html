@@ -48,11 +48,6 @@
 <body class="has-hero">
 <div data-nav></div>
 
-<!-- ============================================================ 招新状态条
-     内容由 site.js 的 RECRUIT 配置渲染（招新中 / 已结束 / 不显示），
-     改配置即可，不用动这里的结构 -->
-<div id="rbar" hidden></div>
-
 <!-- ============================================================ HERO -->
 <section class="hero" aria-label="微光摄影社 开场">
   <div class="hero__slides" id="hero-slides"></div>
@@ -66,7 +61,12 @@
     </div>
 
     <div class="hero__main">
-      <p class="hero__kicker">2026 · 校园影像记录计划　VOL.01</p>
+      <!-- 招新状态胶囊：由 site.js 的 RECRUIT 配置渲染（招新中 / 已结束 / 不显示）。
+           刻意做成同一行的小胶囊而不是整条横带——横条会把首屏画面从中间切断。 -->
+      <div class="hero__kicker-row">
+        <p class="hero__kicker">2026 · 校园影像记录计划　VOL.01</p>
+        <span id="rbar" hidden></span>
+      </div>
       <h1 class="hero__title">
         微光
         <i>GLIMMER</i>

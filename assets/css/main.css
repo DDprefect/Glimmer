@@ -2419,65 +2419,64 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 }
 
 /* ==========================================================================
-   招新状态条（首页顶部）——内容由 site.js 的 RECRUIT 配置驱动，
-   改配置即可切换「招新中 / 已结束 / 不显示」
+   招新状态胶囊（首屏 kicker 行内）——内容由 site.js 的 RECRUIT 配置驱动。
+   早期做成导航下方整条横带，会把首屏画面从中间切断、显得像贴片广告，
+   现在收进 kicker 同一行做小胶囊：信息还在，画面完整。
    ========================================================================== */
-.rbar {
-  position: relative;
-  z-index: 5;
-  background: var(--ink);
-  color: #fff;
-}
-.rbar--open { background: linear-gradient(100deg, #1A1613 0%, #33251D 100%); }
-.rbar__inner {
+.hero__kicker-row {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding-top: 13px;
-  padding-bottom: 13px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
-.rbar__dot {
+.hero__kicker-row .hero__kicker { margin-bottom: 0; }
+
+.hero__recruit {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 11px;
+  border: 1px solid rgba(217, 169, 78, .42);
+  border-radius: 99px;
+  background: rgba(26, 22, 19, .34);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .1em;
+  color: #F2D7A0;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .3s var(--ease), border-color .3s var(--ease);
+}
+.hero__recruit:hover {
+  background: rgba(26, 22, 19, .58);
+  border-color: var(--gold-soft);
+}
+.hero__recruit i {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: var(--gold-soft);
   box-shadow: 0 0 0 3px rgba(217, 169, 78, .22);
+  animation: rbarPulse 1.9s ease-in-out infinite;
 }
-.rbar--open .rbar__dot { animation: rbarPulse 1.9s ease-in-out infinite; }
+.hero__recruit span {
+  opacity: .65;
+  transition: transform .3s var(--ease);
+}
+.hero__recruit:hover span { transform: translateX(3px); }
 @keyframes rbarPulse {
   0%, 100% { box-shadow: 0 0 0 3px rgba(217, 169, 78, .30); }
-  50%      { box-shadow: 0 0 0 8px rgba(217, 169, 78, .04); }
+  50%      { box-shadow: 0 0 0 7px rgba(217, 169, 78, .04); }
 }
-.rbar__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.rbar__txt b { font-family: var(--serif); font-weight: 600; font-size: .93rem; letter-spacing: .02em; }
-.rbar__txt em { font-style: normal; font-size: .76rem; color: rgba(255, 255, 255, .56); }
-.rbar__cta {
-  margin-left: auto;
-  flex: none;
-  font-size: .8rem;
-  color: var(--gold-soft);
-  text-decoration: none;
-  border-bottom: 1px solid rgba(217, 169, 78, .38);
-  padding-bottom: 2px;
-  white-space: nowrap;
-  transition: color .3s var(--ease), border-color .3s var(--ease);
-}
-.rbar__cta:hover { color: #F2D7A0; border-bottom-color: #F2D7A0; }
-@media (max-width: 700px) {
-  .rbar__txt em { display: none; }
-  .rbar__txt b  { font-size: .84rem; }
-  .rbar__cta { font-size: .76rem; }
-}
-
-/* 招新条插在导航与 Hero 之间，会占掉一段文档流高度。
-   Hero 原本只靠 -78px 负 margin 去盖导航，加了招新条后顶部会露出纸色底，
-   导航的白字落在浅底上几乎看不清——所以这里把招新条高度一起吃掉。
-   --rbar-h 由 site.js 按实际渲染高度写入（含桌面/窄屏差异），
-   招新条不显示时不会加 has-rbar 类，此规则不生效。 */
-body.has-rbar .hero {
-  margin-top: calc(-1 * (clamp(62px, 7vw, 78px) + var(--rbar-h, 46px)));
-  min-height: calc(100svh + var(--rbar-h, 46px));
+@media (max-width: 560px) {
+  .hero__kicker-row { gap: 8px; }
+  /* 窄屏 kicker 文字长，和胶囊挤在一行会贴在一起——让胶囊另起一行 */
+  .hero__kicker-row .hero__kicker { flex: 1 1 100%; }
+  .hero__recruit { font-size: .6rem; padding: 4px 10px; }
 }
 
 /* ==========================================================================

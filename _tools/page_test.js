@@ -480,16 +480,14 @@ async function testCommons() {
   var d = dom.window.document;
 
   var rbar = d.getElementById("rbar");
-  ok("招新状态条已渲染", rbar && !rbar.hidden && /rbar--open/.test(rbar.className));
-  ok("招新条文案与跳转按钮", /2026 秋季招新进行中/.test(rbar.textContent) &&
-     d.querySelector(".rbar__cta").getAttribute("href") === "join.html#form", rbar.textContent.trim());
+  ok("招新胶囊已渲染", rbar && !rbar.hidden && !!rbar.querySelector(".hero__recruit"));
+  ok("胶囊文案与跳转", /秋季招新进行中/.test(rbar.textContent) &&
+     rbar.querySelector("a").getAttribute("href") === "join.html#form", rbar.textContent.trim());
+  ok("胶囊在首屏内容内（不再是一条独立横带）", !!d.querySelector(".hero__main .hero__recruit"));
   ok("近期动态 3 张卡片", d.querySelectorAll("#news .news__item").length === 3,
      String(d.querySelectorAll("#news .news__item").length));
   ok("动态含「进行中」标记", !!d.querySelector("#news .news__tag.is-live"));
   ok("动态卡片不显示时间", !d.querySelector("#news .news__date"));
-  /* jsdom 不做布局、offsetHeight 恒为 0，故只验证 body 标记；
-     高度变量由 CSS 的 --rbar-h 回退值（46px）兜底 */
-  ok("首页标记 has-rbar（Hero 要吃掉招新条高度）", d.body.classList.contains("has-rbar"));
 
   var copies = d.querySelectorAll(".foot .foot__copy");
   ok("页脚两个账号可点击复制", copies.length === 2, String(copies.length));
@@ -572,7 +570,6 @@ async function testCommons() {
   ok("404 页导航已注入", !!d4.querySelector(".nav"));
   ok("404 页有回首页与作品集入口", !!d4.querySelector('a[href="index.html"]') && !!d4.querySelector('a[href="gallery.html"]'));
   ok("404 页 noindex", (d4.querySelector('meta[name="robots"]') || {}).content === "noindex");
-  ok("非首页不带 has-rbar（不影响其它页 Hero 规则）", !d4.body.classList.contains("has-rbar"));
   dom4.window.close();
 }
 
