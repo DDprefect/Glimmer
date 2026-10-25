@@ -335,10 +335,16 @@ async function testApi() {
   process.env.COS_REGION = "ap-guangzhou";
   process.env.ADMIN_PASSWORD = "glimmer2026";
 
-  /* COS 删除与外网通知都走桩；记录 方法|URL 便于断言 */
+  /* COS 删除与外网通知都走桩；记录 方法|URL 便于断言。
+     notifyBroken：v2.0.11 排障开关——模拟 NOTIFY_URL 指向的服务整体崩溃
+     （fetch reject），验证通知挂掉不影响投稿主流程 */
+  var notifyBroken = false;
   var realFetch = globalThis.fetch;
   globalThis.fetch = function (url, opts) {
     if (String(url).indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
+    if (notifyBroken && String(url).indexOf("sctapi.ftqq.com") === 0) {
+      return Promise.reject(new Error("simulated ECONNREFUSED"));
+    }
     notifyCalls.push(String(url) + "|" + ((opts && opts.method) || "GET"));
     return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(""); } });
   };
@@ -645,6 +651,27 @@ async function testApi() {
   ok("入库失败 → 500 且不入库", r.status === 500 && mock.state.photos.length === photosBefore, "status=" + r.status);
   ok("已回删 COS 文件（DELETE 签名请求在案）", notifyCalls.some(function (u) { return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/") === 0 && u.indexOf("|DELETE") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
   ok("接口异常推送已触发", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1 && u.indexOf("|GET") !== -1; }), notifyCalls.join(" ; ").slice(0, 200));
+  rl._buckets.clear();
+
+  /* ---------- v2.0.11：通知服务整体崩溃，投稿主流程不许受影响 ---------- */
+  mock.state.failPhotoInsert = false;
+  notifyCalls.length = 0;
+  notifyBroken = true; /* 模拟 NOTIFY_URL 指向的服务不可达（fetch 直接 reject） */
+  rl._buckets.clear();
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("通知炸了也入库"),
+    fakeJpeg(), { Origin: "https://www.lityzglimmer.top" });
+  ok("通知服务挂掉时投稿照常成功", r.status === 200 && r.json.ok &&
+    mock.state.photos.some(function (p) { return p.title === "通知炸了也入库"; }),
+    "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+  notifyBroken = false;
+
+  /* errorOccurred 收到畸形 req 也不许抛：否则原错误发生时 catch 块二次崩溃，
+     500 响应发不出去，前端只剩一句 fetch failed，真正原因被吞（v2.0.11 实录） */
+  var notifyLib = require(path.join(ROOT, "api/_lib/notify.js"));
+  var eoRet = notifyLib.errorOccurred({ headers: null }, "单测", "x");
+  ok("errorOccurred 畸形 req 返回 Promise 不抛", !!eoRet && typeof eoRet.then === "function");
+  await eoRet;
   rl._buckets.clear();
 
   /* ---------- 备份：CSV 写 COS _backup/ ---------- */

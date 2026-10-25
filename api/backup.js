@@ -43,7 +43,8 @@ module.exports = async function (req, res) {
     await notifyLib.backupDone(result);
     http.json(req, res, 200, { ok: true, backup: result });
   } catch (e) {
-    await notifyLib.errorOccurred(req, "月度备份", e && e.message);
+    /* 同 upload：错误上报自身不许再抛（v2.0.11） */
+    try { await notifyLib.errorOccurred(req, "月度备份", e && e.message); } catch (e2) { /* 吞掉 */ }
     http.json(req, res, 500, { ok: false, error: e.message || "备份失败" });
   }
 };

@@ -179,9 +179,24 @@
             headers: { "Content-Type": "application/octet-stream" },
             body: blob
           })
-            .then(function (r) { return r.json().then(function (j) { return { http: r, j: j }; }); })
+            /* 先按文本读响应：函数崩溃时 Vercel 返回的是 HTML 错误页，
+               r.json() 会直接抛「Unexpected token」，真正的错误反而看不见。
+               文本优先 + 尽力解析 JSON，两条路都能把原因亮出来（v2.0.11）。 */
+            .then(function (r) {
+              return r.text().then(function (t) {
+                var j = null;
+                try { j = JSON.parse(t); } catch (e) { /* 非 JSON：HTML 错误页 */ }
+                return { http: r, j: j, text: t };
+              });
+            })
             .then(function (o) {
-              if (!o.http.ok || !o.j.ok) throw new Error(o.j.error || "上传失败，请稍后重试");
+              if (!o.http.ok || !o.j || !o.j.ok) {
+                /* 服务端 JSON 错误 → 原样展示；非 JSON → 状态码 + 页面片段 */
+                var detail = (o.j && o.j.error) ||
+                  (o.text || "").replace(/\s+/g, " ").slice(0, 100) ||
+                  ("HTTP " + o.http.status);
+                throw new Error(detail);
+              }
               step("put", "done");
               return o.j;
             });
@@ -201,8 +216,13 @@
 
       .catch(function (err) {
         /* 报错附带页面地址：本站排查过跨域/域名类故障（见 README 排障记录），
-           带上 origin 一眼就能看出用户是从哪个域打开的投稿页 */
-        showMsg(((err && err.message) || "提交失败，请稍后重试") +
+           带上 origin 一眼就能看出用户是从哪个域打开的投稿页。
+           undici 的网络层错误码（ECONNRESET / UND_ERR_CONNECT_TIMEOUT 等）
+           只挂在 err.cause 上，带上它才能区分「连接被中断」与「服务端报错」 */
+        var cause = err && err.cause;
+        var net = cause && (cause.code || cause.message)
+          ? "［网络层：" + (cause.code || cause.message) + "］" : "";
+        showMsg(((err && err.message) || "提交失败，请稍后重试") + net +
           "（页面地址：" + location.origin + "）", "is-err");
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
       })

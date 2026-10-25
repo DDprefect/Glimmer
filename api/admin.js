@@ -224,7 +224,8 @@ module.exports = async function (req, res) {
     if (e && e.unauthorized) {
       return http.json(req, res, 401, { ok: false, error: "密码不正确" });
     }
-    await notifyLib.errorOccurred(req, "管理后台", e && e.message);
+    /* 同 upload：错误上报自身不许再抛，保证错误信息能发回前端（v2.0.11） */
+    try { await notifyLib.errorOccurred(req, "管理后台", e && e.message); } catch (e2) { /* 吞掉 */ }
     http.json(req, res, 500, { ok: false, error: e.message || "服务器错误" });
   }
 };

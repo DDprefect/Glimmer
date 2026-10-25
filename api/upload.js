@@ -151,7 +151,10 @@ module.exports = async function (req, res) {
 
     http.json(req, res, 200, { ok: true, photo: photo, fileUrl: fileUrl });
   } catch (e) {
-    await notifyLib.errorOccurred(req, "上传投稿", e.message);
+    /* 错误上报自身不许再抛：原错误发生时 errorOccurred 若崩溃，
+       500 响应就发不出去，前端只剩一句「fetch failed」，真正的原因被吞掉。
+       notify 内部已有兜底，这里再包一层双保险（v2.0.11 排障实录）。 */
+    try { await notifyLib.errorOccurred(req, "上传投稿", e.message); } catch (e2) { /* 吞掉 */ }
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }
 };

@@ -61,7 +61,8 @@ module.exports = async function (req, res) {
     await notifyLib.signupSubmitted({ name: name, class: cls, contact: contact, interest: interest });
     http.json(req, res, 200, { ok: true });
   } catch (e) {
-    await notifyLib.errorOccurred(req, "新生报名", e.message);
+    /* 同 upload：错误上报自身不许再抛，保证 500 的错误信息能发回前端（v2.0.11） */
+    try { await notifyLib.errorOccurred(req, "新生报名", e.message); } catch (e2) { /* 吞掉 */ }
     http.json(req, res, 500, { ok: false, error: e.message || "提交失败" });
   }
 };
