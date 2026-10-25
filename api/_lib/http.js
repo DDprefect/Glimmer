@@ -51,11 +51,21 @@ function allowOrigin(req) {
   return "https://lityzglimmer.top";
 }
 
+/* 部署版本诊断头：Vercel 为 Git 集成的部署自动注入 VERCEL_GIT_COMMIT_SHA，
+   这里把它前 7 位放进每个 JSON 响应头 x-glimmer-rev——线上出问题时用户
+   截图 DevTools 的 Response Headers 就能看到跑的是哪个 commit，
+   「本地明明修好了线上还报错」一类疑惑从此可自查（v2.0.10 加）。 */
+function deployRev() {
+  var sha = process.env.VERCEL_GIT_COMMIT_SHA || "";
+  return sha ? sha.slice(0, 7) : "local";
+}
+
 function applyCors(req, res) {
   res.setHeader("Access-Control-Allow-Origin", allowOrigin(req));
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Vary", "Origin");
+  res.setHeader("X-Glimmer-Rev", deployRev());
 }
 
 function json(req, res, code, obj) {
@@ -132,7 +142,12 @@ function readRaw(req, limit) {
 
 /* 来源软检查：只拦「明摆着来自别的站」的浏览器 POST。
    注意：curl 等非浏览器客户端不带 Origin，拦不住也不打算拦——
-   那类攻击靠限流 + 全局熔断 + 人工审核兜底（见 api/_lib/ratelimit.js）。 */
+   那类攻击靠限流 + 全局熔断 + 人工审核兜底（见 api/_lib/ratelimit.js）。
+   ⚠️ v2.0.10 起 upload/register 已临时**不再调用**本函数做拦截：
+   连续三次修复仍误拦真实用户（本地放行、线上 403，根因疑似 Vercel 部署与
+   本地行为不一致），而防护价值本就有限。函数与规则保留，恢复只需在
+   api/upload.js、api/register.js 取消注释。originAllowedValue 仍被
+   allowOrigin 使用（CORS 反射白名单，浏览器层真实有效，未动）。 */
 function originSuspicious(req) {
   return !originAllowedValue(req.headers.origin);
 }

@@ -580,12 +580,9 @@ async function testApi() {
   ok("白名单：大小写混合放行", httpLib.originAllowedValue("HTTPS://WWW.LityzGlimmer.TOP") === true);
   ok("白名单：全角标点的外部站照拦", httpLib.originAllowedValue("https：//evil。com") === false);
 
-  /* 来源检查：明确的外部 Origin 拒绝，且报错带回收到的来源便于截图定位 */
-  r = await callRaw(P, "POST",
-    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("跨站测试"),
-    Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]),
-    { Origin: "https://evil.example.com" });
-  ok("upload 恶意 Origin → 403 且报错带回来源", r.status === 403 && /evil\.example\.com/.test(r.json.error || ""), JSON.stringify(r.json));
+  /* v2.0.10：originSuspicious 拦截已临时下线（upload/register 取消调用），
+     端到端 403 用例随之移除；纯函数规则与 rejectOrigin 保留，供恢复时使用。
+     外部 Origin 的投稿从此照常走后续防护（限流/熔断/魔数/蜜罐/人工审核）。 */
 
   /* 被拦时报错把不可见字符以 ·hex· 标出，用户截图即可定位（v2.0.9） */
   var roReq = { headers: { origin: "https://evil.example.com\u200b" } };
@@ -597,6 +594,19 @@ async function testApi() {
   httpLib.rejectOrigin(roReq, roRes);
   var roJson = JSON.parse(roRes._body);
   ok("rejectOrigin 把零宽字符标为 ·200b·", roRes.statusCode === 403 && roJson.error.indexOf("·200b·") !== -1, roJson.error);
+
+  /* 诊断响应头：线上截图 DevTools 即可看到部署 commit（v2.0.10）。
+     本地跑没有 VERCEL_GIT_COMMIT_SHA，头值为 "local"；Vercel 上为 sha 前 7 位 */
+  var revReq = { headers: {} };
+  var revRes = {
+    statusCode: 0, headers: {},
+    setHeader: function (k, v) { this.headers[k] = v; },
+    end: function () {}
+  };
+  httpLib.json(revReq, revRes, 200, { ok: true });
+  var wantRev = process.env.VERCEL_GIT_COMMIT_SHA ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : "local";
+  ok("json 响应带 x-glimmer-rev 诊断头", revRes.headers["X-Glimmer-Rev"] === wantRev,
+    "got=" + revRes.headers["X-Glimmer-Rev"] + " want=" + wantRev);
 
   /* 放宽后端到端验证：http 来源的真实投稿不再被 403 挡下 */
   rl._buckets.clear();
