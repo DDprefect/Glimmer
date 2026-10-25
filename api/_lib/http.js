@@ -5,19 +5,40 @@
    ========================================================================== */
 
 /* 来源白名单（纯字符串判定）：
-   站点各域（http/https、任意子域深度、任意端口）、Vercel 部署域（任意子域
-   深度）、本地调试地址。不带 Origin（curl 等非浏览器客户端）与 Origin: null
+   站点各域（http/https、任意端口、任意层级子域）、Vercel 部署域（任意层级）、
+   本地调试地址。不带 Origin（curl 等非浏览器客户端）与 Origin: null
    （沙箱 iframe 等不透明来源）一律放行——投稿/报名另有限流、全局熔断、
    JPG 魔数、蜜罐和人工审核兜底，来源检查从来不是主防线。
-   2026-10-25 放宽：此前只认 https 且拒绝端口/localhost/null，实测有用户从
-   http、带端口或镜像域打开页面时投稿被误拦（「来源不受支持」），现只拦
-   明确的外部来源。 */
+   两次放宽的由来：v2.0.8 把「只认 https」放宽为「只拦明确外部来源」后，
+   仍有用户（手机 5G 网络）被误拦——收到的 Origin 显示为正常的
+   https://www.lityzglimmer.top 却过不了正则。实际是网络侧代理/安全
+   软件往头部里插了不可见字符（空格、零宽字符等），肉眼看不出。
+   因此匹配前先剥掉所有非可见 ASCII 字符，并按「主机名以本站域结尾」判定。 */
 function originAllowedValue(o) {
+  if (o == null) return true;
+  /* 第一步先把全角标点规范化成 ASCII（：→ :、．→ .、。→ .、／→ /）：
+     否则 "top：443" 剥掉全角冒号后会变成 "top443"，端口剥离就失效了。
+     第二步剥掉所有非可见 ASCII 字符：空格/换行/零宽/其它杂字一律视为
+     注入噪声。Origin 头部按规范只含可见 ASCII，任何其它字节都是被塞进来的。
+     规范化只是让畸形字符串回归标准形态，之后照走严格的结尾匹配 */
+  o = String(o)
+    .replace(/\uff1a/g, ":").replace(/\uff0e/g, ".").replace(/\u3002/g, ".").replace(/\uff0f/g, "/")
+    .replace(/[^\x21-\x7e]/g, "").toLowerCase();
   if (!o || o === "null") return true;
-  if (/^https?:\/\/([a-z0-9-]+\.)*lityzglimmer\.top(:\d+)?$/i.test(o)) return true;
-  if (/^https?:\/\/([a-z0-9-]+\.)*vercel\.app(:\d+)?$/i.test(o)) return true;
-  if (/^https?:\/\/localhost(:\d+)?$/i.test(o)) return true;
-  if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/i.test(o)) return true;
+  /* 提取主机名。顺序要紧：先剥端口（否则 "localhost:8848" 的 "localhost:"
+     会被残缺协议正则当成 scheme 连主机名一起吃掉，只剩 "8848"），
+     再剥协议头（标准 ://、冒号丢失的 //、单杠 :/ 三种形态都算），
+     最后才剥路径——反过来先剥路径会把 "https//www.lityzglimmer.top"
+     整个切没。协议头被代理剥乱时主机名结尾依然是本站域，照样命中 */
+  var host = o.replace(/:\d+(\/.*)?$/, "");
+  host = host.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+  host = host.replace(/^[a-z][a-z0-9+.-]*\/\//, "");
+  host = host.replace(/^[a-z][a-z0-9+.-]*:\/*/, "");
+  host = host.replace(/\/.*$/, "").replace(/\.+$/, "");
+  if (/(^|\.)lityzglimmer\.top$/.test(host)) return true;
+  if (/(^|\.)vercel\.app$/.test(host)) return true;
+  if (/(^|\.)localhost$/.test(host)) return true;
+  if (host === "127.0.0.1") return true;
   return false;
 }
 
@@ -116,12 +137,17 @@ function originSuspicious(req) {
   return !originAllowedValue(req.headers.origin);
 }
 
-/* 来源被拦时的 403：把收到的来源原样带回报错文案，
-   用户截图就能看出是从哪个域打开的页面，方便加白名单 */
+/* 来源被拦时的 403：把收到的来源原样带回，且不可见字符以 ·hex· 标出——
+   浏览器/网络代理若往 Origin 里塞了空格、零宽字符，截图里能直接看见，
+   不用猜（v2.0.9 排查实录：用户手机 5G 网络下 Origin 被插入不可见字节） */
 function rejectOrigin(req, res) {
-  var o = String(req.headers.origin || "");
-  if (o.length > 80) o = o.slice(0, 80) + "…";
-  return json(req, res, 403, { ok: false, error: "来源不受支持（origin: " + o + "）" });
+  var raw = String(req.headers.origin || "");
+  var shown = raw.length > 60 ? raw.slice(0, 60) + "…" : raw;
+  shown = shown.replace(/[^\x21-\x7e]/g, function (ch) {
+    var c = ch.codePointAt(0);
+    return "·" + (c < 16 ? "0" : "") + c.toString(16) + "·";
+  });
+  return json(req, res, 403, { ok: false, error: "来源不受支持（origin: " + shown + "）" });
 }
 
 /* 环境变量自检：返回缺失的变量名列表 */

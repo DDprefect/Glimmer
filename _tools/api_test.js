@@ -567,6 +567,18 @@ async function testApi() {
   ok("白名单：外部 https 域拦截", httpLib.originAllowedValue("https://evil.example.com") === false);
   ok("白名单：外部 http 域拦截", httpLib.originAllowedValue("http://evil.example.com") === false);
   ok("白名单：仿冒后缀域拦截", httpLib.originAllowedValue("https://lityzglimmer.top.evil.com") === false);
+  /* v2.0.9：网络侧代理/安全软件会往 Origin 头里塞不可见字符（用户手机 5G 实测被误拦），
+     全角标点先规范化成 ASCII、其余非可见字符剥掉，之后按正常域名放行 */
+  ok("白名单：尾部空格剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top ") === true);
+  ok("白名单：首部空格剥除后放行", httpLib.originAllowedValue(" https://www.lityzglimmer.top") === true);
+  ok("白名单：尾部换行剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top\n") === true);
+  ok("白名单：零宽字符剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top\u200b") === true);
+  ok("白名单：全角冒号规范化为 ASCII 后放行", httpLib.originAllowedValue("https：//www.lityzglimmer.top") === true);
+  ok("白名单：全角冒号端口规范化后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top：443") === true);
+  ok("白名单：中文句号规范化后放行", httpLib.originAllowedValue("https://www.lityzglimmer。top") === true);
+  ok("白名单：协议头被剥乱仍按结尾放行", httpLib.originAllowedValue("https//www.lityzglimmer.top") === true);
+  ok("白名单：大小写混合放行", httpLib.originAllowedValue("HTTPS://WWW.LityzGlimmer.TOP") === true);
+  ok("白名单：全角标点的外部站照拦", httpLib.originAllowedValue("https：//evil。com") === false);
 
   /* 来源检查：明确的外部 Origin 拒绝，且报错带回收到的来源便于截图定位 */
   r = await callRaw(P, "POST",
@@ -574,6 +586,17 @@ async function testApi() {
     Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]),
     { Origin: "https://evil.example.com" });
   ok("upload 恶意 Origin → 403 且报错带回来源", r.status === 403 && /evil\.example\.com/.test(r.json.error || ""), JSON.stringify(r.json));
+
+  /* 被拦时报错把不可见字符以 ·hex· 标出，用户截图即可定位（v2.0.9） */
+  var roReq = { headers: { origin: "https://evil.example.com\u200b" } };
+  var roRes = {
+    statusCode: 0, headers: {},
+    setHeader: function (k, v) { this.headers[k] = v; },
+    end: function (s) { this._body = s; }
+  };
+  httpLib.rejectOrigin(roReq, roRes);
+  var roJson = JSON.parse(roRes._body);
+  ok("rejectOrigin 把零宽字符标为 ·200b·", roRes.statusCode === 403 && roJson.error.indexOf("·200b·") !== -1, roJson.error);
 
   /* 放宽后端到端验证：http 来源的真实投稿不再被 403 挡下 */
   rl._buckets.clear();
