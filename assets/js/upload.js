@@ -200,7 +200,10 @@
       })
 
       .catch(function (err) {
-        showMsg((err && err.message) || "提交失败，请稍后重试", "is-err");
+        /* 报错附带页面地址：本站排查过跨域/域名类故障（见 README 排障记录），
+           带上 origin 一眼就能看出用户是从哪个域打开的投稿页 */
+        showMsg(((err && err.message) || "提交失败，请稍后重试") +
+          "（页面地址：" + location.origin + "）", "is-err");
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
       })
 

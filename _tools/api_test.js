@@ -18,6 +18,7 @@ var path = require("path");
 var ROOT = path.join(__dirname, "..");
 var cos = require(path.join(ROOT, "api/_lib/cos.js"));
 var rl = require(path.join(ROOT, "api/_lib/ratelimit.js"));
+var httpLib = require(path.join(ROOT, "api/_lib/http.js"));
 
 var PASS = 0;
 var FAIL = 0;
@@ -551,12 +552,37 @@ async function testApi() {
     Buffer.from("这不是图片，是一段伪装成图片的文本内容，长度足够超过 2KB " + "x".repeat(3000)));
   ok("upload 非 JPEG 魔数 → 400", r.status === 400 && /JPG/.test(r.json.error || ""), JSON.stringify(r.json));
 
-  /* 来源检查：非本站 Origin 的浏览器 POST 拒绝 */
+  /* ---------- 来源白名单（2026-10-25 放宽：http/端口/多级 vercel.app/localhost/null 放行） ---------- */
+  ok("白名单：站点 https 主域放行", httpLib.originAllowedValue("https://lityzglimmer.top") === true);
+  ok("白名单：站点 www 子域放行", httpLib.originAllowedValue("https://www.lityzglimmer.top") === true);
+  ok("白名单：站点 http 放行（用户实测被误拦的场景）", httpLib.originAllowedValue("http://www.lityzglimmer.top") === true);
+  ok("白名单：站点带端口放行", httpLib.originAllowedValue("https://lityzglimmer.top:8443") === true);
+  ok("白名单：多级子域放行", httpLib.originAllowedValue("https://foo.bar.lityzglimmer.top") === true);
+  ok("白名单：单级 vercel.app 放行", httpLib.originAllowedValue("https://glimmer-abc123.vercel.app") === true);
+  ok("白名单：多级 vercel.app 放行", httpLib.originAllowedValue("https://foo.bar.vercel.app") === true);
+  ok("白名单：localhost 放行", httpLib.originAllowedValue("http://localhost:8848") === true);
+  ok("白名单：127.0.0.1 放行", httpLib.originAllowedValue("http://127.0.0.1:3000") === true);
+  ok("白名单：Origin: null 放行（沙箱 iframe 等不透明来源）", httpLib.originAllowedValue("null") === true);
+  ok("白名单：无 Origin 放行（非浏览器客户端）", httpLib.originAllowedValue(undefined) === true);
+  ok("白名单：外部 https 域拦截", httpLib.originAllowedValue("https://evil.example.com") === false);
+  ok("白名单：外部 http 域拦截", httpLib.originAllowedValue("http://evil.example.com") === false);
+  ok("白名单：仿冒后缀域拦截", httpLib.originAllowedValue("https://lityzglimmer.top.evil.com") === false);
+
+  /* 来源检查：明确的外部 Origin 拒绝，且报错带回收到的来源便于截图定位 */
   r = await callRaw(P, "POST",
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("跨站测试"),
     Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]),
     { Origin: "https://evil.example.com" });
-  ok("upload 恶意 Origin → 403", r.status === 403, "status=" + r.status);
+  ok("upload 恶意 Origin → 403 且报错带回来源", r.status === 403 && /evil\.example\.com/.test(r.json.error || ""), JSON.stringify(r.json));
+
+  /* 放宽后端到端验证：http 来源的真实投稿不再被 403 挡下 */
+  rl._buckets.clear();
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("http来源投稿") +
+    "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg(), { Origin: "http://www.lityzglimmer.top" });
+  ok("upload Origin: http://www.lityzglimmer.top → 放行入库", r.status === 200 && r.json.ok, "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+  rl._buckets.clear();
 
   /* 频率限制：单 IP 10 分钟 15 次，第 16 次 429 */
   rl._buckets.clear();

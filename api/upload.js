@@ -52,9 +52,10 @@ module.exports = async function (req, res) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置环境变量：" + miss.join(", ") });
     }
 
-    /* 防护一：跨站表单 POST 拦截 */
+    /* 防护一：跨站表单 POST 拦截（只拦明确的外部来源；
+       报错带回收到的来源，用户截图即可定位是哪个域） */
     if (http.originSuspicious(req)) {
-      return http.json(req, res, 403, { ok: false, error: "来源不受支持" });
+      return http.rejectOrigin(req, res);
     }
 
     /* 防护二：单 IP 频率限制 */

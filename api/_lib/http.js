@@ -4,13 +4,29 @@
    仅服务端运行；密钥一律走 process.env，禁止在本文件出现任何明文密钥。
    ========================================================================== */
 
-/* 允许的跨域来源：站点主域 + Vercel 预览部署（*.vercel.app）。
+/* 来源白名单（纯字符串判定）：
+   站点各域（http/https、任意子域深度、任意端口）、Vercel 部署域（任意子域
+   深度）、本地调试地址。不带 Origin（curl 等非浏览器客户端）与 Origin: null
+   （沙箱 iframe 等不透明来源）一律放行——投稿/报名另有限流、全局熔断、
+   JPG 魔数、蜜罐和人工审核兜底，来源检查从来不是主防线。
+   2026-10-25 放宽：此前只认 https 且拒绝端口/localhost/null，实测有用户从
+   http、带端口或镜像域打开页面时投稿被误拦（「来源不受支持」），现只拦
+   明确的外部来源。 */
+function originAllowedValue(o) {
+  if (!o || o === "null") return true;
+  if (/^https?:\/\/([a-z0-9-]+\.)*lityzglimmer\.top(:\d+)?$/i.test(o)) return true;
+  if (/^https?:\/\/([a-z0-9-]+\.)*vercel\.app(:\d+)?$/i.test(o)) return true;
+  if (/^https?:\/\/localhost(:\d+)?$/i.test(o)) return true;
+  if (/^https?:\/\/127\.0\.0\.1(:\d+)?$/i.test(o)) return true;
+  return false;
+}
+
+/* 允许的跨域来源：命中白名单就原样反射（含 null），否则回落到主域。
    生产环境前后端同源，本意只是兜底；本地 file:// 打开时接口调用会失败，
    各页面均已做「接口不可用则退回原静态行为」的降级。 */
 function allowOrigin(req) {
   var o = req.headers.origin || "";
-  if (/^https:\/\/([a-z0-9-]+\.)*lityzglimmer\.top$/i.test(o)) return o;
-  if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(o)) return o;
+  if (o && originAllowedValue(o)) return o;
   return "https://lityzglimmer.top";
 }
 
@@ -93,14 +109,19 @@ function readRaw(req, limit) {
   });
 }
 
-/* 来源软检查：浏览器发起的跨站 POST 拦截掉。
+/* 来源软检查：只拦「明摆着来自别的站」的浏览器 POST。
    注意：curl 等非浏览器客户端不带 Origin，拦不住也不打算拦——
    那类攻击靠限流 + 全局熔断 + 人工审核兜底（见 api/_lib/ratelimit.js）。 */
 function originSuspicious(req) {
-  var o = req.headers.origin;
-  if (!o) return false;
-  return !/^https:\/\/([a-z0-9-]+\.)*lityzglimmer\.top$/i.test(o) &&
-         !/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(o);
+  return !originAllowedValue(req.headers.origin);
+}
+
+/* 来源被拦时的 403：把收到的来源原样带回报错文案，
+   用户截图就能看出是从哪个域打开的页面，方便加白名单 */
+function rejectOrigin(req, res) {
+  var o = String(req.headers.origin || "");
+  if (o.length > 80) o = o.slice(0, 80) + "…";
+  return json(req, res, 403, { ok: false, error: "来源不受支持（origin: " + o + "）" });
 }
 
 /* 环境变量自检：返回缺失的变量名列表 */
@@ -117,6 +138,7 @@ function clean(v, maxLen) {
 
 module.exports = {
   allowOrigin: allowOrigin,
+  originAllowedValue: originAllowedValue,
   applyCors: applyCors,
   json: json,
   preflight: preflight,
@@ -125,5 +147,6 @@ module.exports = {
   readRaw: readRaw,
   missingEnv: missingEnv,
   originSuspicious: originSuspicious,
+  rejectOrigin: rejectOrigin,
   clean: clean
 };
