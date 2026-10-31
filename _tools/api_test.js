@@ -14,6 +14,7 @@ var assert = require("assert");
 var http = require("http");
 var crypto = require("crypto");
 var path = require("path");
+var fs = require("fs");
 
 var ROOT = path.join(__dirname, "..");
 var cos = require(path.join(ROOT, "api/_lib/cos.js"));
@@ -369,6 +370,17 @@ async function testApi() {
   ok("GET 只返回 approved", r.json.photos.length === 2 && r.json.photos.every(function (p) { return p.status === "approved"; }));
   ok("GET 按 created_at 倒序", r.json.photos[0].id === 1 && r.json.photos[1].id === 3);
 
+  /* ---------- v2.0.12 F3：安全响应头 ---------- */
+  ok("API 响应带 nosniff", r.headers["x-content-type-options"] === "nosniff", JSON.stringify(r.headers));
+  ok("API 响应带 X-Frame-Options: DENY", r.headers["x-frame-options"] === "DENY", r.headers["x-frame-options"]);
+  ok("API 响应带 Referrer-Policy", r.headers["referrer-policy"] === "strict-origin-when-cross-origin", r.headers["referrer-policy"]);
+  ok("API 响应带 CSP（Report-Only 起步）", (r.headers["content-security-policy-report-only"] || "").indexOf("script-src 'self'") !== -1, r.headers["content-security-policy-report-only"]);
+  var vjson = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
+  var vkeys = ((vjson.headers || [])[0] || { headers: [] }).headers.map(function (h) { return h.key; });
+  ok("vercel.json 配了四项安全头（静态资源同款）",
+    ["Content-Security-Policy-Report-Only", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"]
+      .every(function (k) { return vkeys.indexOf(k) !== -1; }), vkeys.join(","));
+
   /* ---------- photos 已收敛为只读（投稿只走 /api/upload） ---------- */
   r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
   ok("photos 不再接受 POST → 405", r.status === 405);
@@ -398,6 +410,10 @@ async function testApi() {
   /* ---------- photo-status（投稿自查） ---------- */
   r = await call(P, "POST", "/api/photo-status", { title: "新作", author: "丁" });
   ok("photo-status 命中 → 状态中文化", r.status === 200 && r.json.items.length === 1 && r.json.items[0].statusText === "待审核", JSON.stringify(r.json.items));
+  /* v2.0.12 F2：未发布作品的图片地址不外泄 */
+  ok("photo-status 未发布作品不带 file_url", r.json.items[0].file_url === "", JSON.stringify(r.json.items[0]));
+  r = await call(P, "POST", "/api/photo-status", { title: "老图·已发布", author: "甲" });
+  ok("photo-status 已发布作品返回 file_url", r.status === 200 && r.json.items.length === 1 && /^https:\/\//.test(r.json.items[0].file_url || ""), JSON.stringify(r.json.items));
   r = await call(P, "POST", "/api/photo-status", { title: "不存在的标题" });
   ok("photo-status 未命中 → 空列表", r.status === 200 && r.json.items.length === 0);
   r = await call(P, "POST", "/api/photo-status", { title: "" });
@@ -679,6 +695,12 @@ async function testApi() {
   notifyCalls.length = 0;
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "backup" });
   ok("admin backup → 200 且返回 stamp/计数", r.status === 200 && r.json.ok && r.json.backup && /^\d{4}-\d{2}$/.test(r.json.backup.stamp || "") && typeof r.json.backup.photos === "number", JSON.stringify(r.json).slice(0, 160));
+  /* v2.0.12 F1：备份下载一律走限时预签名 URL，推送不再携带 PII 链接 */
+  ok("备份返回限时预签名 URL（含 q-signature）",
+    /q-signature=[0-9a-f]{40}/.test(r.json.backup.photosUrl || "") && /q-signature=[0-9a-f]{40}/.test(r.json.backup.subsUrl || ""),
+    r.json.backup.photosUrl);
+  var bPush = notifyCalls.filter(function (u) { return u.indexOf("sctapi.ftqq.com") !== -1; }).map(function (u) { return decodeURIComponent(u); });
+  ok("备份推送不再携带 PII 下载链接（无任何 COS 地址）", bPush.length > 0 && bPush.every(function (u) { return u.indexOf("myqcloud.com") === -1; }), bPush.join(" ; ").slice(0, 200));
   ok("备份 CSV 已写 COS _backup/（PUT 签名请求在案）", notifyCalls.some(function (u) {
     return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/_backup/") === 0 && u.indexOf("|PUT") !== -1;
   }), notifyCalls.join(" ; ").slice(0, 240));
@@ -734,6 +756,49 @@ async function testApi() {
   await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
   r = await call(P, "POST", "/api/register-status", { name: "丁", contact: "QQ 88888" });
   ok("报名自查：第 11 次 → 429 限流", r.status === 429, "status=" + r.status);
+  rl._buckets.clear();
+
+  /* ---------- v2.0.12 F5：集中存储限流（Upstash 协议 mock） ---------- */
+  var centralHits = new Map();
+  var centralSrv = http.createServer(function (req, res) {
+    var chunks = [];
+    req.on("data", function (c) { chunks.push(c); });
+    req.on("end", function () {
+      var cmds = JSON.parse(Buffer.concat(chunks).toString("utf8") || "[]");
+      var out = cmds.map(function (cmd) {
+        var op = String(cmd[0] || "").toUpperCase();
+        var k = cmd[1];
+        if (op === "INCR") { var n = (centralHits.get(k) || 0) + 1; centralHits.set(k, n); return { result: n }; }
+        if (op === "EXPIRE") { return { result: centralHits.has(k) ? 1 : 0 }; }
+        if (op === "DEL") { centralHits.delete(k); return { result: 1 }; }
+        return { result: null };
+      });
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(out));
+    });
+  });
+  await new Promise(function (res2) { centralSrv.listen(0, "127.0.0.1", res2); });
+  var realFetch2 = globalThis.fetch;
+  globalThis.fetch = realFetch; /* 换回真实 fetch，直连本地 mock */
+  process.env.UPSTASH_REDIS_REST_URL = "http://127.0.0.1:" + centralSrv.address().port;
+  process.env.UPSTASH_REDIS_REST_TOKEN = "test-token";
+  var cOk = true;
+  for (var ci = 0; ci < 3; ci++) { if (!(await rl.allow("central-test", 3, 60000))) cOk = false; }
+  ok("集中存储：前 3 次放行", cOk);
+  ok("集中存储：第 4 次拦下（跨调用计数生效）", (await rl.allow("central-test", 3, 60000)) === false);
+  await rl.reset("central-test");
+  ok("集中存储：reset 后重新放行", (await rl.allow("central-test", 3, 60000)) === true);
+  var gReq = { headers: { "x-forwarded-for": "9.9.9.9" }, socket: null };
+  ok("集中存储：guard 首次放行", (await rl.guard(gReq, "cscene", 1, 60000)) === true);
+  ok("集中存储：guard 第二次拦下", (await rl.guard(gReq, "cscene", 1, 60000)) === false);
+  /* 集中存储故障 → 自动回退本地内存，不许把调用方炸掉 */
+  process.env.UPSTASH_REDIS_REST_URL = "http://127.0.0.1:1"; /* 不可达端口 */
+  ok("集中存储故障回退本地内存且放行", (await rl.allow("fallback-test", 5, 60000)) === true);
+  delete process.env.UPSTASH_REDIS_REST_URL;
+  delete process.env.UPSTASH_REDIS_REST_TOKEN;
+  centralHits.clear();
+  centralSrv.close();
+  globalThis.fetch = realFetch2;
   rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */

@@ -73,7 +73,10 @@ function signupSubmitted(s) {
   }
 }
 
-/* 备份完成通知 */
+/* 备份完成通知。
+   v2.0.12 安全整改：不再推送备份下载链接——CSV 含报名 PII，且 NOTIFY_URL
+   通常是第三方服务（Server 酱等），PII 链接不该出站。管理员在后台「立即备份」
+   的返回里拿限时预签名链接即可。 */
 function backupDone(result) {
   try {
     var r = result || {};
@@ -81,10 +84,9 @@ function backupDone(result) {
       "备份时间：" + new Date().toISOString(),
       "作品记录：" + (r.photos != null ? r.photos : "—") + " 条",
       "报名记录：" + (r.subs != null ? r.subs : "—") + " 条",
-      r.photosUrl ? "作品备份：" + r.photosUrl : "",
-      r.subsUrl ? "报名备份：" + r.subsUrl : "",
       "",
-      "备份文件存放在 COS 的 _backup/ 目录，Supabase 项目万一被删也能找回数据"
+      "备份文件已写入 COS _backup/ 目录（私有语义，凭限时签名链接下载）；" +
+      "Supabase 项目万一被删也能找回数据"
     ].filter(Boolean).join("\n");
     return notify("月度备份完成 · " + (r.stamp || ""), lines3);
   } catch (e) {
@@ -92,11 +94,13 @@ function backupDone(result) {
   }
 }
 
-/* 接口异常通知（500 路径用；按 IP 限 3 条/10 分钟，防止刷屏） */
-function errorOccurred(req, where, message) {
+/* 接口异常通知（500 路径用；按 IP 限 3 条/10 分钟，防止刷屏）。
+   v2.0.12：rl.guard 异步化后本函数改为 async——整体仍在 try/catch 内，
+   任何意外（含畸形 req）都 resolve false，绝不把原错误吞成二次崩溃 */
+async function errorOccurred(req, where, message) {
   try {
-    if (!process.env.NOTIFY_URL) return Promise.resolve(false);
-    if (!rl.guard(req, "err-notify", 3, 10 * 60 * 1000)) return Promise.resolve(false);
+    if (!process.env.NOTIFY_URL) return false;
+    if (!(await rl.guard(req, "err-notify", 3, 10 * 60 * 1000))) return false;
     var lines4 = [
       "接口：" + where,
       "时间：" + new Date().toISOString(),
@@ -106,7 +110,7 @@ function errorOccurred(req, where, message) {
     ].join("\n");
     return notify("接口异常 · " + where, lines4);
   } catch (e) {
-    return Promise.resolve(false);
+    return false;
   }
 }
 

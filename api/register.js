@@ -30,8 +30,8 @@ module.exports = async function (req, res) {
     //   return http.rejectOrigin(req, res);
     // }
 
-    /* 防护二：单 IP 频率限制 */
-    if (!rl.guard(req, "register", RL_MAX, RL_WINDOW)) {
+    /* 防护二：单 IP 频率限制（v2.0.12 起限流异步化，支持集中存储） */
+    if (!(await rl.guard(req, "register", RL_MAX, RL_WINDOW))) {
       return http.json(req, res, 429, { ok: false, error: "提交太频繁，请 10 分钟后再试" });
     }
 

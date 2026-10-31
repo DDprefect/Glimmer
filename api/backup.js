@@ -35,7 +35,7 @@ module.exports = async function (req, res) {
       if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) {
         return http.json(req, res, 401, { ok: false, error: "未授权" });
       }
-    } else if (!rl.guard(req, "backup", 5, 10 * 60 * 1000)) {
+    } else if (!(await rl.guard(req, "backup", 5, 10 * 60 * 1000))) {
       return http.json(req, res, 429, { ok: false, error: "备份请求太频繁，请 10 分钟后再试" });
     }
 

@@ -75,7 +75,7 @@ module.exports = async function (req, res) {
     /* ---- 密码比对（恒定时间，防时序侧信道） ---- */
     /* 防暴力破解：同一 IP 连续错 5 次锁 10 分钟；验证成功即清零 */
     var failKey = rl.clientIp(req) + ":admin-fail";
-    if (!rl.allow(failKey, 5, 10 * 60 * 1000)) {
+    if (!(await rl.allow(failKey, 5, 10 * 60 * 1000))) {
       return http.json(req, res, 429, { ok: false, error: "密码错误次数过多，已锁定 10 分钟" });
     }
     var pw = Buffer.from(String(body.password || ""), "utf8");
@@ -83,7 +83,7 @@ module.exports = async function (req, res) {
     if (pw.length !== want.length || !crypto.timingSafeEqual(pw, want)) {
       return http.json(req, res, 401, { ok: false, error: "密码不正确" });
     }
-    rl.reset(failKey);
+    await rl.reset(failKey);
 
     var action = String(body.action || "");
     var id = http.clean(body.id, 40);

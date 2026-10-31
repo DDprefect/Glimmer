@@ -566,6 +566,18 @@
     });
   }
 
+  /* URL 进 HTML 属性前的安全过滤（v2.0.12）：
+     危险 scheme（javascript: / data: / vbscript: / file: 等）一律拒绝返回空串；
+     http(s) 外链与站内相对路径（静态作品全是 assets/img/... 相对路径）放行，
+     再过一道 esc 防 " 逃出属性。此前 workCard 的 thumb 是全站唯一裸拼 URL 的点，
+     虽然来源当前可信（服务端 COS 地址 / 本地清单），统一转义消除隐患。 */
+  function safeUrl(u) {
+    var s = String(u == null ? "" : u).trim();
+    if (!s) return "";
+    if (/^[a-z][a-z0-9+.\-]*:/i.test(s) && !/^https?:/i.test(s)) return "";
+    return esc(s);
+  }
+
   function workCard(item, i, delay) {
     // 原始比例做温和钳制：避免超宽/超高的图把网格参差拉得过大。
     // 无 ratio 的条目（数据库投稿，前端未知尺寸）先按 3:2 占位，
@@ -577,7 +589,7 @@
              'style="--ar:' + ar + ";animation-delay:" + ((delay || 0) + Math.min(i, 12) * 45) + 'ms" ' +
              'aria-label="查看作品：' + esc(item.title) + '">' +
              '<span class="work__ph">' +
-               '<img src="' + item.thumb + '" alt="' + esc(item.title + " · " + item.group) + '" ' +
+               '<img src="' + safeUrl(item.thumb) + '" alt="' + esc(item.title + " · " + item.group) + '" ' +
                  'loading="lazy" decoding="async" width="880" height="' + h + '"' +
                  (hasRatio ? "" : ' data-autorate="1"') + ">" +
                '<span class="work__zoom" aria-hidden="true">' +
@@ -626,7 +638,7 @@
     return (window.WORKS || []).filter(function (w) { return !w.hidden; });
   }
 
-  window.Glimmer = { $: $, $$: $$, esc: esc, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM, thumbUrl: thumbUrl };
+  window.Glimmer = { $: $, $$: $$, esc: esc, safeUrl: safeUrl, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM, thumbUrl: thumbUrl };
 
   /* 动态渲染出来的图片：调试/截图模式下立即加载，避免懒加载留白 */
   function eagerAll(root) {
@@ -666,8 +678,17 @@
     }, "分享文案已复制 ✓");
   }
 
+  /* ---------------------------------------------------------- 字体翻转
+     各页字体 <link> 以 media="print" 异步加载避免阻塞渲染。原先靠链接上的
+     内联 onload 翻转回 all，v2.0.12 起改由这里统一接管——内联事件处理器
+     属于内联脚本，CSP 的 script-src 'self' 不放行（v2.0.12 安全整改）。 */
+  function flipFonts() {
+    $$('link[rel="stylesheet"][media="print"]').forEach(function (l) { l.media = "all"; });
+  }
+
   /* ---------------------------------------------------------- 启动 */
   function boot() {
+    flipFonts();
     curtain();
     renderNav();
     renderRecruit();

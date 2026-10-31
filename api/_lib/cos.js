@@ -112,6 +112,13 @@ function publicUrl(key) {
   return "https://" + c.Bucket + ".cos." + c.Region + ".myqcloud.com/" + encodeURIComponent(key).replace(/%2F/g, "/");
 }
 
+/* 限时预签名 GET 地址（v2.0.12）：私有语义对象的下载入口，比如月度备份 CSV。
+   与 publicUrl 的区别：带签名 + 有效期，到期即失效；画廊图片仍走 publicUrl。
+   前提：COS 桶策略对 _backup/* 拒绝匿名读（控制台操作），否则对象本身仍公有读。 */
+function signedGetUrl(key, seconds) {
+  return sign("get", key, seconds || 7 * 24 * 3600).url;
+}
+
 /* 从公开地址反推对象键；非本桶地址返回 null（用于删除前校验） */
 function keyFromUrl(u) {
   var host = hostOfSafe();
@@ -134,5 +141,6 @@ module.exports = {
   hostOfSafe: hostOfSafe,
   sign: sign,
   publicUrl: publicUrl,
+  signedGetUrl: signedGetUrl,
   keyFromUrl: keyFromUrl
 };

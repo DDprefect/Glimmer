@@ -26,7 +26,7 @@ module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
   if (!http.requireMethod(req, res, ["POST"])) return;
 
-  if (!rl.guard(req, "regstatus", 10, 10 * 60 * 1000)) {
+  if (!(await rl.guard(req, "regstatus", 10, 10 * 60 * 1000))) {
     return http.json(req, res, 429, { ok: false, error: "查询太频繁，请稍后再试" });
   }
 

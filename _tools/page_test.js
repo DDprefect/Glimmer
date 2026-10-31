@@ -129,6 +129,21 @@ async function testGallery() {
   ok("人像与视觉筛选计数含数据库作品", parseInt(portraitBtn.querySelector("b").textContent, 10) > 0, portraitBtn.textContent);
   ok("投稿入口已加入 gallery", !!d.querySelector('a[href="upload.html"]'));
 
+  /* v2.0.12 F4：workCard 的 URL 转义（全站唯一裸拼点已收紧） */
+  var G1 = dom.window.Glimmer;
+  var evilCard = G1.workCard({ thumb: '" onerror=alert(1) x="', title: "T", group: "G", src: "s" }, 0, 0);
+  var probe = dom.window.document.createElement("div");
+  probe.innerHTML = evilCard;
+  var evilImg = probe.querySelector("img");
+  ok("workCard 恶意 thumb 被转义（payload 完整关在 src 值内、无 onerror 注入）",
+    !!evilImg && !probe.querySelector("[onerror]") &&
+    evilImg.getAttribute("src") === '" onerror=alert(1) x="',
+    "src=" + (evilImg ? evilImg.getAttribute("src") : "no img"));
+  var jsCard = G1.workCard({ thumb: "javascript:alert(1)", title: "T", group: "G", src: "s" }, 0, 0);
+  ok("workCard javascript: 协议被拒", jsCard.indexOf("javascript:") === -1, jsCard.slice(0, 120));
+  var relCard = G1.workCard({ thumb: "assets/img/works/a.jpg", title: "T", group: "G", src: "s" }, 0, 0);
+  ok("workCard 站内相对路径放行（静态作品不受影响）", relCard.indexOf('src="assets/img/works/a.jpg"') !== -1, relCard.slice(0, 160));
+
   /* 接口失败降级 */
   var dom2 = await loadPage("gallery.html", function (window) {
     baseStubs(window);
@@ -177,6 +192,12 @@ async function testIndex() {
   ok("最新收录加载缩图（640px）", /imageMogr2\/thumbnail\/640x/.test(d.querySelector("#latest-strip img").getAttribute("src")), d.querySelector("#latest-strip img").getAttribute("src"));
   ok("卡片链到作品深链", d.querySelector("#latest-strip .latest-card").getAttribute("href") === "gallery.html#photo-101");
 
+  /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
+  var fontLink = d.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]');
+  ok("字体链接 onload 已移除且由 site.js 翻转为 all",
+    fontLink && fontLink.getAttribute("media") === "all" && !fontLink.getAttribute("onload"),
+    fontLink ? ("media=" + fontLink.getAttribute("media") + " onload=" + fontLink.getAttribute("onload")) : "no link");
+
   /* 接口失败 → 区块保持隐藏，不挡首页 */
   var dom2 = await loadPage("index.html", function (window) {
     baseStubs(window);
@@ -189,6 +210,12 @@ async function testIndex() {
 /* ======================================================================== */
 async function testJoin() {
   console.log("\n[join] 报名提交");
+
+  /* v2.0.12 F3：内联脚本块已抽到 assets/js/join.js（CSP script-src 'self' 前提） */
+  var joinHtml = fs.readFileSync(path.join(ROOT, "join.html"), "utf8");
+  ok("join.html 已无内联脚本块且引用外部 join.js",
+    joinHtml.indexOf("<script>\n") === -1 && joinHtml.indexOf('src="assets/js/join.js"') !== -1,
+    "inline=" + (joinHtml.indexOf("<script>\n") !== -1));
 
   /* 场景 1：接口正常 → 入库成功态 */
   var payload = null;

@@ -60,7 +60,33 @@ function deployRev() {
   return sha ? sha.slice(0, 7) : "local";
 }
 
+/* 安全响应头（v2.0.12）。CSP 先以 Report-Only 上线观察，确认无违规后再切强制
+   （把 Report-Only 后缀去掉即可，vercel.json 里静态资源同款同步改）。
+   script-src 收紧到 'self' 的前提已具备：join 页内联脚本已抽到外部文件、
+   字体链接的 onload 翻改由 site.js 统一接管（v2.0.12 清理）。 */
+var CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
+  "font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
+  "img-src 'self' https://*.myqcloud.com data:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "manifest-src 'self'"
+].join("; ");
+
+function securityHeaders(res) {
+  res.setHeader("Content-Security-Policy-Report-Only", CSP);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+}
+
 function applyCors(req, res) {
+  securityHeaders(res);
   res.setHeader("Access-Control-Allow-Origin", allowOrigin(req));
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");

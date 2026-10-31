@@ -37,12 +37,16 @@ module.exports = async function (req, res) {
     );
 
     var items = (rows || []).map(function (r) {
+      /* v2.0.12 安全整改：file_url 只对已发布作品返回——
+         待审核/已下架的图不该被按标题反查到可访问的地址（桶公有读，URL 即入口）；
+         自查只需要「状态」，所以其余状态置空，功能不受影响 */
+      var approved = r.status === "approved";
       return {
         title: r.title,
         category: r.category,
         status: r.status,
         statusText: STATUS_TEXT[r.status] || r.status,
-        file_url: r.file_url,
+        file_url: approved ? r.file_url : "",
         created_at: r.created_at
       };
     });
