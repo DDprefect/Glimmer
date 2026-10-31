@@ -732,9 +732,22 @@
     $$('link[rel="stylesheet"][media="print"]').forEach(function (l) { l.media = "all"; });
   }
 
+  /* ---------------------------------------------------------- 访问统计
+     v2.4.0：注入 Vercel Web Analytics（在 Vercel 后台 Analytics 页开启后生效，
+     免费额度够社团用）。未开启时该路径 404，对页面无任何影响；
+     file:// 本地打开与截图模式不注入。 */
+  function analytics() {
+    if (SHOT || location.protocol === "file:") return;
+    var s = document.createElement("script");
+    s.defer = true;
+    s.src = "/_vercel/insights/script.js";
+    document.head.appendChild(s);
+  }
+
   /* ---------------------------------------------------------- 启动 */
   function boot() {
     flipFonts();
+    analytics();
     curtain();
     renderNav();
     renderRecruit();

@@ -22,8 +22,13 @@ var ROOT = path.join(__dirname, "..");
    sessionStorage / isSecureContext 等行为才真实），脚本与样式映射到本地文件，
    其它外链（Google Fonts 等）返回空响应，不打网络。 */
 var localInterceptor = requestInterceptor(async function (request) {
-  var m = /^https:\/\/ltyzglimmer\.top\/(.*)$/.exec(request.url);
+  /* 只取路径部分：带查询串（?cat=portrait、?v=2.4.0）的请求也能映射到本地文件 */
+  var m = /^https:\/\/ltyzglimmer\.top\/([^?#]*)/.exec(request.url);
   if (!m) return new Response("", { status: 200, headers: { "Content-Type": "text/plain" } });
+  /* 访问统计脚本（v2.4.0 注入）在本地没有实体文件：返回空 JS，避免 jsdom 报 404 噪音 */
+  if (m[1].indexOf("_vercel/insights/") === 0) {
+    return new Response("", { headers: { "Content-Type": "text/javascript" } });
+  }
   var local = path.join(ROOT, decodeURIComponent(m[1])).replace(/\\/g, "/");
   var ext = path.extname(local).toLowerCase();
   var type = ext === ".js" ? "text/javascript" : ext === ".css" ? "text/css" : "application/octet-stream";
@@ -40,12 +45,18 @@ function ok(name, cond, extra) {
 }
 
 function loadPage(file, beforeParse) {
-  /* 支持 "gallery.html#photo-101" 这类带 hash 的文件参数 */
+  /* 支持 "gallery.html#photo-101" 与 "gallery.html?cat=portrait" 这类带 hash/查询的文件参数 */
   var hash = "";
   var hi = file.indexOf("#");
   if (hi !== -1) {
     hash = file.slice(hi);
     file = file.slice(0, hi);
+  }
+  var query = "";
+  var qi = file.indexOf("?");
+  if (qi !== -1) {
+    query = file.slice(qi);
+    file = file.slice(0, qi);
   }
   var html = fs.readFileSync(path.join(ROOT, file), "utf8");
   var vc = new VirtualConsole(); // 吞掉 jsdom 的 canvas not implemented 等噪音
@@ -54,7 +65,7 @@ function loadPage(file, beforeParse) {
     console.log("    [jsdomError] " + (d && d.message ? d.message : d));
   });
   var dom = new JSDOM(html, {
-    url: "https://ltyzglimmer.top/" + file + hash, // 与生产同源，存储/安全上下文行为真实
+    url: "https://ltyzglimmer.top/" + file + query + hash, // 与生产同源，存储/安全上下文行为真实
     runScripts: "dangerously",
     resources: { interceptors: [localInterceptor] },
     pretendToBeVisual: true,
@@ -169,6 +180,15 @@ async function testGallery() {
   ok("灯箱加载原图（非缩图）", !!lb && !/imageMogr2/.test(lb.querySelector("img").getAttribute("src") || ""), lb ? lb.querySelector("img").getAttribute("src") : "");
   var dlBtn = lb ? lb.querySelector(".lb__dl") : null;
   ok("灯箱有下载原图按钮（v2.2.0）", !!dlBtn && !dlBtn.hidden);
+
+  /* v2.4.0：分类进 URL——打开 ?cat=portrait 直接进入该分类，切换时写回地址栏 */
+  var domCat = await loadPage("gallery.html?cat=portrait");
+  await new Promise(function (r) { setTimeout(r, 250); });
+  var onBtn = domCat.window.document.querySelector(".filter.is-on");
+  ok("?cat=portrait 直接进入该分类（v2.4.0）", !!onBtn && onBtn.getAttribute("data-cat") === "portrait", onBtn ? onBtn.getAttribute("data-cat") : "none");
+  domCat.window.document.querySelector('.filter[data-cat="city"]').click();
+  await new Promise(function (r) { setTimeout(r, 60); });
+  ok("切换分类写回地址栏（v2.4.0）", /[?&]cat=city/.test(domCat.window.location.search), domCat.window.location.search);
   dom.window.close(); dom2.window.close(); dom3.window.close();
 }
 

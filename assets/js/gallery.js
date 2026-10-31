@@ -92,9 +92,31 @@
           b.classList.add("is-on");
           state.cat = b.getAttribute("data-cat");
           state.shown = PER_PAGE;
+          syncCatUrl(state.cat); /* v2.4.0：分类写回 URL，分享/刷新不丢 */
           render(true);
         });
       });
+
+      /* v2.4.0：地址栏带合法分类（gallery.html?cat=portrait）就直接进入该分类 */
+      var wantCat = "";
+      try { wantCat = new URLSearchParams(location.search).get("cat") || ""; } catch (e) {}
+      if (wantCat && wantCat !== "all" && CATS.some(function (c) { return c.key === wantCat; })) {
+        state.cat = wantCat;
+        $$(".filter", filterHost).forEach(function (b) {
+          b.classList.toggle("is-on", b.getAttribute("data-cat") === wantCat);
+        });
+      }
+    }
+
+    /* v2.4.0：把当前分类同步进地址栏（replaceState 不产生历史记录）。
+       all 时不写参数，保持地址干净；hash（单作品深链）原样保留。 */
+    function syncCatUrl(key) {
+      try {
+        var u = new URL(location.href);
+        if (!key || key === "all") u.searchParams.delete("cat");
+        else u.searchParams.set("cat", key);
+        history.replaceState(null, "", u.pathname + (u.search ? u.search : "") + u.hash);
+      } catch (e) { /* 异常环境静默降级，不影响筛选本身 */ }
     }
 
     /* ---------------- 渲染 ---------------- */
