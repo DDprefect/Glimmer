@@ -2649,3 +2649,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 /* v2.2.8：灯箱切换加载态——大图未就绪时半透明，避免「只换名字不换图」观感 */
 .lb__img { transition: opacity .3s var(--ease); }
 .lb__img.is-loading { opacity: .3; }
+
+/* v2.3.0：灯箱图片视口兜底——即便父级高度百分比解析失败也按视口约束，
+   任何屏幕上大图都完整可见（配合 v2.2.6 的舞台拉伸双保险） */
+.lb__img { max-height: min(100%, calc(100vh - 170px)); }
