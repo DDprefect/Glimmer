@@ -1,5 +1,7 @@
 # 微光摄影社官网 · 安全整改实施规格（AI 执行文档）
 
+> **实施状态（2026-10-31）**：F1（代码侧）/ F2 / F3 / F4 / F5 已全部按本文档落地并随 v2.0.12（commit b6aa1c5）推送上线；F6 按门控保持下线未动。**F1 的 COS 桶策略（Deny 匿名读 `_backup/*`）仍需控制台人工操作**；F5 的集中存储 env（UPSTASH_REDIS_REST_URL+TOKEN 或 RATE_LIMIT_KV_REST_API+TOKEN）未配则自动回退内存。F4 实际实现与本文档略有差异：`safeUrl` 采用「危险 scheme 黑名单 + 放行站内相对路径」而非 `^https?://` 白名单——因为静态作品的 thumb 是 `assets/img/...` 相对路径，按白名单会全部被误杀。CSP 当前为 Report-Only，观察无违规后把 http.js 与 vercel.json 里的后缀去掉转强制。测试最终 137（api）+ 95（page）全绿。
+
 > 本文档供实施 AI 直接照做。**范围：P0 / P1 / P2 全部整改。已明确排除 P3（低风险/卫生项：missingEnv 回显变量名、X-Glimmer-Rev 暴露 commit、蜜罐纯前端、后台无审计/2FA）。**
 > 严禁改动业务行为之外的东西；每项改动都要过既有测试（`_tools/api_test.js` 122 断言 / `_tools/page_test.js` 90 断言）并新增对应断言。
 > 当前线上：`https://lityzglimmer.top`，Vercel Serverless（`api/*.js` CommonJS 零依赖）+ 腾讯云 COS（广州，**公有读私有写**）+ Supabase Postgres。源码零密钥，密钥全在 Vercel 环境变量。
@@ -22,7 +24,7 @@
 - `api/_lib/backup.js`：`putText()` 用 `cos.sign("put", key, 600)` 写入后，返回 `cos.publicUrl(key)` —— 公有读地址。
 - `runBackup()` 把 `submissions`（姓名/年级班级/联系方式/想说的话）+ `photos` 导出 CSV，写到 `_backup/<YYYY-MM>/`，文件名带月份、可枚举。
 - `api/backup.js`、`api/admin.js` 的 `backup` action 把这两个公有 URL 返回；`api/_lib/notify.js` 的 `backupDone()` 把它们推到第三方 `NOTIFY_URL`。
-- 后果：任何人拼出 `https://lityzglimmer-photos-1495891073.cos.ap-guangzhou.myqcloud.com/_backup/2026-11/submissions-2026-11.csv` 即下载全部报名隐私。
+- 后果：任何人拼出 `https://ltyzglimmer-photos-1495891073.cos.ap-guangzhou.myqcloud.com/_backup/2026-11/submissions-2026-11.csv` 即下载全部报名隐私。
 
 ### 目标行为
 1. `_backup/` 对象对匿名**不可读**（COS 控制台桶策略，人工）。
@@ -32,7 +34,7 @@
 ### 具体改动
 
 **(a) COS 控制台（人工，必做）**
-在桶 `lityzglimmer-photos-1495891073` 的「权限管理 → 桶策略」追加一条**拒绝匿名读 `_backup/*`**（保留原有对图片前缀的公有读 Allow）：
+在桶 `ltyzglimmer-photos-1495891073` 的「权限管理 → 桶策略」追加一条**拒绝匿名读 `_backup/*`**（保留原有对图片前缀的公有读 Allow）：
 ```json
 {
   "Statement": [
@@ -40,7 +42,7 @@
       "Effect": "Deny",
       "Principal": "*",
       "Action": "cos:GetObject",
-      "Resource": "qcs::cos:ap-guangzhou:uid/1495891073:lityzglimmer-photos-1495891073/_backup/*"
+      "Resource": "qcs::cos:ap-guangzhou:uid/1495891073:ltyzglimmer-photos-1495891073/_backup/*"
     }
   ]
 }

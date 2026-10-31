@@ -25,6 +25,7 @@ var csvLib = require("./_lib/csv");
 var backupLib = require("./_lib/backup");
 var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
+var watermarkLib = require("./_lib/watermark");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -43,7 +44,8 @@ function sendCsv(req, res, filename, csv) {
   res.end("\uFEFF" + csv);
 }
 
-/* 尽力删除 COS 文件；返回成功删除数 */
+/* 尽力删除 COS 文件；返回成功删除数。
+   v2.1.0 起水印功能会把原图副本放在 _original/ 私有前缀——删除作品时一并清理，不留孤儿 */
 async function deleteCosFiles(rows) {
   var deleted = 0;
   for (var i = 0; i < (rows || []).length; i++) {
@@ -56,8 +58,30 @@ async function deleteCosFiles(rows) {
     } catch (e) {
       /* 单文件失败不阻塞其余 */
     }
+    try {
+      var oSigned = cos.sign("delete", watermarkLib.originalKeyOf(key), 600);
+      await fetch(oSigned.url, { method: "DELETE" });
+    } catch (e2) {
+      /* 同上：原图副本删不掉只留私有目录里，不阻塞主流程 */
+    }
   }
   return deleted;
+}
+
+/* 打水印（审核通过自动触发，也可对已发布作品重试）。
+   失败不阻塞审核：公开图暂时还是未打水印版，推送提醒干部用「打水印」重试 */
+async function watermarkForId(id, req) {
+  try {
+    var rows = await db.photos.byId(id);
+    var row = Array.isArray(rows) ? rows[0] : null;
+    if (!row || !row.file_url) return { ok: false, error: "未找到作品图片地址" };
+    var key = cos.keyFromUrl(row.file_url);
+    if (!key) return { ok: false, error: "图片地址不属于本站存储桶，跳过水印" };
+    return await watermarkLib.applyWatermark(key);
+  } catch (e) {
+    try { await notifyLib.errorOccurred(req, "作品打水印", e.message); } catch (e2) { /* 吞掉 */ }
+    return { ok: false, error: e.message || "打水印失败" };
+  }
 }
 
 module.exports = async function (req, res) {
@@ -109,7 +133,15 @@ module.exports = async function (req, res) {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
       var status = action === "approve" ? "approved" : action === "unpublish" ? "offline" : "approved";
       await db.photos.setStatus(id, status);
-      http.json(req, res, 200, { ok: true });
+      /* 审核通过 → 自动打水印（保原图 + 公开位覆盖为带水印版）。
+         失败不影响审核结果，watermarked=false + wmError 让前端提示重试 */
+      var wm = null;
+      if (action === "approve") wm = await watermarkForId(id, req);
+      http.json(req, res, 200, {
+        ok: true,
+        watermarked: !!(wm && wm.ok),
+        wmError: wm && !wm.ok ? wm.error : undefined
+      });
       return;
     }
 
@@ -173,6 +205,17 @@ module.exports = async function (req, res) {
       }
       await db.photos.update(id, patch);
       http.json(req, res, 200, { ok: true });
+      return;
+    }
+
+    /* ---------------- 打水印（对已发布/已下架作品手动重试） ---------------- */
+    if (action === "watermark") {
+      if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
+      var wmRetry = await watermarkForId(id, req);
+      if (!wmRetry.ok) {
+        return http.json(req, res, 500, { ok: false, error: wmRetry.error || "打水印失败" });
+      }
+      http.json(req, res, 200, { ok: true, watermarked: true });
       return;
     }
 

@@ -394,6 +394,7 @@ async function testAdmin() {
   zoomEl.classList.remove("is-open");
 
   ok("已发布卡片含下架/编辑钮", !!d.querySelector('#pane-approved button[data-act="unpublish"]') && !!d.querySelector('#pane-approved button[data-act="edit"]'));
+  ok("已发布卡片含打水印重试钮（v2.1.0）", !!d.querySelector('#pane-approved button[data-act="watermark"]'));
   ok("已下架卡片含恢复钮", !!d.querySelector('#pane-offline button[data-act="restore"]'));
 
   /* 批量通过 */
@@ -423,6 +424,12 @@ async function testAdmin() {
   d.querySelector('#pane-approved button[data-act="unpublish"]').click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点下架 → 请求 unpublish 动作", callLog.some(function (b) { return b && b.action === "unpublish"; }), JSON.stringify(callLog));
+
+  /* 打水印重试（v2.1.0） */
+  callLog.length = 0;
+  d.querySelector('#pane-approved button[data-act="watermark"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点打水印 → 请求 watermark 动作", callLog.some(function (b) { return b && b.action === "watermark" && String(b.id) === "8"; }), JSON.stringify(callLog));
 
   /* 审核通过 */
   var approveBtn = d.querySelector('#pane-pending button[data-act="approve"]');

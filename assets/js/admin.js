@@ -124,6 +124,7 @@
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else if (mode === "approved") {
       ops = '<button class="admin-op" type="button" data-act="edit" data-id="' + p.id + '">编辑</button>' +
+            '<button class="admin-op" type="button" data-act="watermark" data-id="' + p.id + '" title="重打水印：公开图覆盖为带水印版，原图留在私有目录">打水印</button>' +
             '<button class="admin-op" type="button" data-act="unpublish" data-id="' + p.id + '">下架</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else {
@@ -385,7 +386,23 @@
 
       if (act === "approve" || act === "unpublish" || act === "restore") {
         btn.disabled = true;
-        api(act, { id: id }).then(load).catch(errHandler);
+        api(act, { id: id }).then(function (j) {
+          /* 审核通过会自动打水印；失败不阻塞审核，只提示可手动重试 */
+          if (act === "approve" && j && j.watermarked === false) {
+            showMsg(panelMsg, "已通过审核，但打水印失败（" + (j.wmError || "原因未知") +
+              "）。稍后可在该作品上点「打水印」重试。", "is-err");
+          }
+          return load();
+        }).catch(errHandler);
+        return;
+      }
+      if (act === "watermark") {
+        btn.disabled = true;
+        showMsg(panelMsg, "");
+        api("watermark", { id: id }).then(function () {
+          showMsg(panelMsg, "水印已打好：公开图片已覆盖为带水印版，原图保存在私有 _original/ 目录。",
+            "is-ok");
+        }).catch(errHandler).then(function () { btn.disabled = false; });
         return;
       }
       if (act === "remove") {

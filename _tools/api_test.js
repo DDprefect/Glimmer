@@ -337,22 +337,39 @@ async function testApi() {
   process.env.ADMIN_PASSWORD = "glimmer2026";
 
   /* COS 删除与外网通知都走桩；记录 方法|URL 便于断言。
+     v2.1.0 起桩升级：cosCalls 记录完整请求头（水印功能的 copy-source /
+     Pic-Operations 断言要用）；cosObjects 模拟对象存在性（PUT 建、DELETE 删、
+     HEAD 查），让 objectExists/copyObject/imageProcess 的编排逻辑可测。
      notifyBroken：v2.0.11 排障开关——模拟 NOTIFY_URL 指向的服务整体崩溃
      （fetch reject），验证通知挂掉不影响投稿主流程 */
   var notifyBroken = false;
   var realFetch = globalThis.fetch;
+  var notifyCalls = [];
+  var cosCalls = [];
+  var cosObjects = new Set();
   globalThis.fetch = function (url, opts) {
-    if (String(url).indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
-    if (notifyBroken && String(url).indexOf("sctapi.ftqq.com") === 0) {
+    var u = String(url);
+    var method = ((opts && opts.method) || "GET").toUpperCase();
+    if (u.indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
+    if (u.indexOf("myqcloud.com") !== -1) {
+      cosCalls.push({ url: u, method: method, headers: (opts && opts.headers) || {} });
+      var path = u.split("?")[0];
+      if (method === "HEAD") {
+        var hit = cosObjects.has(path);
+        return Promise.resolve({ ok: hit, status: hit ? 200 : 404, text: function () { return Promise.resolve(""); }, json: function () { return Promise.resolve({}); } });
+      }
+      if (method === "PUT") cosObjects.add(path);
+      if (method === "DELETE") cosObjects.delete(path);
+    }
+    if (notifyBroken && u.indexOf("sctapi.ftqq.com") === 0) {
       return Promise.reject(new Error("simulated ECONNREFUSED"));
     }
-    notifyCalls.push(String(url) + "|" + ((opts && opts.method) || "GET"));
-    return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(""); } });
+    notifyCalls.push(u + "|" + method);
+    return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(""); }, json: function () { return Promise.resolve({}); } });
   };
 
   var P = api.port;
   var COS_BASE = "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/";
-  var notifyCalls = [];
   process.env.NOTIFY_URL = "https://sctapi.ftqq.com/TESTSENDKEY.send";
 
   /* 合规的假 JPEG：SOI(FFD8FFE0) + 3KB 载荷 + EOI(FFD9) */
@@ -799,6 +816,67 @@ async function testApi() {
   centralHits.clear();
   centralSrv.close();
   globalThis.fetch = realFetch2;
+  rl._buckets.clear();
+
+  /* ---------- v2.1.0 水印（数据万象 CI：保原图 + 覆盖公开位） ---------- */
+  rl._buckets.clear();
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("水印测试作品") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg());
+  var wmId = r.json.photo.id;
+  ok("水印测试作品已入库 pending", r.status === 200 && wmId > 0, JSON.stringify(r.json).slice(0, 120));
+
+  cosCalls.length = 0;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "approve", id: String(wmId) });
+  ok("approve → 200 且 watermarked=true", r.status === 200 && r.json.ok && r.json.watermarked === true, JSON.stringify(r.json).slice(0, 160));
+  ok("原图已复制到 _original/（x-cos-copy-source 签入）", cosCalls.some(function (c) {
+    return c.method === "PUT" && c.headers["x-cos-copy-source"] && c.url.indexOf("myqcloud.com/_original/") !== -1;
+  }), cosCalls.map(function (c) { return c.method + " " + c.url.slice(0, 90); }).join(" ; "));
+  var wmProc = cosCalls.filter(function (c) { return c.method === "POST" && c.url.indexOf("&image_process") !== -1; })[0];
+  ok("CI 持久化处理已发起（POST image_process）", !!wmProc);
+  ok("Pic-Operations 规则含 logo 水印+盲水印且 fileid 已编码", (function () {
+    try {
+      var j = JSON.parse(wmProc.headers["Pic-Operations"]);
+      return j.rules[0].rule.indexOf("watermark/1/image/") !== -1 &&
+             j.rules[0].rule.indexOf("|watermark/3/type/3/text/") !== -1 &&
+             j.rules[0].fileid.indexOf("%") !== -1;
+    } catch (e) { return false; }
+  })(), wmProc ? String(wmProc.headers["Pic-Operations"]).slice(0, 120) : "no proc");
+
+  cosCalls.length = 0;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "watermark", id: String(wmId) });
+  ok("watermark 重试 → 200", r.status === 200 && r.json.ok === true, JSON.stringify(r.json));
+  ok("重试不再复制原图（_original 已存在，绝不覆盖真原图）", !cosCalls.some(function (c) {
+    return c.method === "PUT" && c.url.indexOf("myqcloud.com/_original/") !== -1;
+  }));
+  ok("重试仍发起 CI 处理", cosCalls.some(function (c) { return c.method === "POST" && c.url.indexOf("&image_process") !== -1; }));
+
+  /* CI 处理失败：审核不受影响，返回 watermarked=false 并推送提醒 */
+  var stubFetch = globalThis.fetch;
+  globalThis.fetch = function (url, opts) {
+    if (String(url).indexOf("myqcloud.com") !== -1 && String(url).indexOf("&image_process") !== -1) {
+      return Promise.resolve({ ok: false, status: 500, text: function () {
+        return Promise.resolve('<?xml version="1.0"?><Error><Code>AccessDenied</Code><Message>mock ci fail</Message></Error>');
+      }, json: function () { return Promise.resolve({}); } });
+    }
+    return stubFetch(url, opts);
+  };
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("水印失败作品") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg());
+  var wmId2 = r.json.photo.id;
+  notifyCalls.length = 0;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "approve", id: String(wmId2) });
+  ok("CI 处理失败时审核仍成功（watermarked=false + 错误回传）", r.status === 200 && r.json.ok === true && r.json.watermarked === false && /mock ci fail/.test(r.json.wmError || ""), JSON.stringify(r.json).slice(0, 200));
+  ok("水印失败已推送错误通知", notifyCalls.some(function (u) { return u.indexOf("sctapi.ftqq.com") !== -1; }));
+  globalThis.fetch = stubFetch;
+
+  /* 删除作品 → _original/ 原图一并清理 */
+  cosCalls.length = 0;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "delete", id: String(wmId) });
+  ok("删除作品 → _original/ 原图一并清理", r.status === 200 && r.json.ok && cosCalls.some(function (c) {
+    return c.method === "DELETE" && c.url.indexOf("myqcloud.com/_original/") !== -1;
+  }));
   rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */

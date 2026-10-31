@@ -70,17 +70,28 @@ function hostOfSafe() {
 }
 
 /* 生成一次签名。
-   method: "put" / "delete"；key: 对象键（可含 / 目录）。
+   method: "put" / "delete" / "post" / "head" / "get"；key: 对象键（可含 / 目录）。
+   extraHeaders: 需要一并签入的请求头（如 x-cos-copy-source / Pic-Operations /
+   Content-Type）——COS 要求请求里出现的 x-cos-* 与参与处理运算的头必须进签名。
    返回 { url, host, key }，url 已带签名参数，可直接 fetch。 */
-function sign(method, key, expiresSeconds) {
+function sign(method, key, expiresSeconds, extraHeaders) {
   var c = cfg();
   var m = String(method || "put").toLowerCase();
   var now = Math.round(Date.now() / 1000) - 1;
   var exp = now + (expiresSeconds || 600);
   var keyTime = now + ";" + exp;
 
-  // 与 SDK 一致：签入 Host，防跨桶挪用
+  // 与 SDK 一致：签入 Host，防跨桶挪用；附加头按调用方需求合并
   var headers = { Host: c.Bucket + ".cos." + c.Region + ".myqcloud.com" };
+  if (extraHeaders) {
+    Object.keys(extraHeaders).forEach(function (k) {
+      if (extraHeaders[k] != null) headers[k] = String(extraHeaders[k]);
+    });
+  }
+  var headerList = Object.keys(headers)
+    .map(function (k) { return k.toLowerCase(); })
+    .sort()
+    .join(";");
 
   var signKey = crypto.createHmac("sha1", c.SecretKey).update(keyTime).digest("hex");
   var formatString = Buffer.from([m, "/" + key, "", obj2str(headers), ""].join("\n"), "utf8");
@@ -92,7 +103,7 @@ function sign(method, key, expiresSeconds) {
     "q-ak=" + camSafeUrlEncode(c.SecretId),
     "q-sign-time=" + camSafeUrlEncode(keyTime),
     "q-key-time=" + camSafeUrlEncode(keyTime),
-    "q-header-list=host",
+    "q-header-list=" + headerList,
     "q-url-param-list=",
     "q-signature=" + signature
   ].join("&");
@@ -134,6 +145,71 @@ function keyFromUrl(u) {
   }
 }
 
+/* COS/CI 错误响应（XML）→ 抛带 Code/Message 的 Error，便于上抛与通知 */
+function errorFromRes(res) {
+  return res.text().then(function (t) {
+    var code = (/<Code>([^<]+)<\/Code>/.exec(t) || [])[1] || "";
+    var msg = (/<Message>([^<]+)<\/Message>/.exec(t) || [])[1] || "";
+    var err = new Error("COS/CI " + res.status + (code ? " " + code : "") + "：" +
+      (msg || (t || "").slice(0, 120) || "请求失败"));
+    err.status = res.status;
+    throw err;
+  }, function () {
+    var err = new Error("COS/CI " + res.status + "：请求失败");
+    err.status = res.status;
+    throw err;
+  });
+}
+
+/* 对象是否存在（签名 HEAD）。桶策略只拒匿名，不影响服务端自访 */
+function objectExists(key) {
+  var s = sign("head", key, 600);
+  return fetch(s.url, { method: "HEAD" }).then(function (res) {
+    if (res.ok) return true;
+    if (res.status === 404) return false;
+    return errorFromRes(res).then(function () { return false; });
+  });
+}
+
+/* 复制对象。x-cos-copy-source 需 URL 编码、必须签入签名且真实随请求携带 */
+function copyObject(fromKey, toKey) {
+  var c = cfg();
+  var source = camSafeUrlEncode(c.Bucket + ".cos." + c.Region + ".myqcloud.com/" + fromKey);
+  var s = sign("put", toKey, 600, { "x-cos-copy-source": source });
+  return fetch(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }).then(function (res) {
+    if (!res.ok) return errorFromRes(res);
+    return true;
+  });
+}
+
+/* 写入缓冲对象（如水印 logo 自举上传） */
+function putBuffer(key, buf, contentType) {
+  var headers = contentType ? { "Content-Type": contentType } : null;
+  var s = sign("put", key, 600, headers);
+  return fetch(s.url, { method: "PUT", body: buf, headers: headers || undefined }).then(function (res) {
+    if (!res.ok) return errorFromRes(res);
+    return true;
+  });
+}
+
+/* 数据万象·云上图片持久化处理（POST image_process + Pic-Operations 头，需签入）。
+   官方语义：fileid 与 srcKey 相同时，处理结果覆盖原文件。
+   rule 为处理参数串，多个操作用管道符 | 串联（如 水印|盲水印）。 */
+function imageProcess(srcKey, destKey, rule) {
+  var pic = JSON.stringify({
+    is_pic_info: 1,
+    rules: [{ fileid: camSafeUrlEncode(destKey), rule: rule }]
+  });
+  var s = sign("post", srcKey, 600, { "Pic-Operations": pic });
+  return fetch(s.url + "&image_process", {
+    method: "POST",
+    headers: { "Pic-Operations": pic }
+  }).then(function (res) {
+    if (!res.ok) return errorFromRes(res);
+    return res.json().catch(function () { return {}; });
+  });
+}
+
 module.exports = {
   camSafeUrlEncode: camSafeUrlEncode,
   obj2str: obj2str,
@@ -142,5 +218,9 @@ module.exports = {
   sign: sign,
   publicUrl: publicUrl,
   signedGetUrl: signedGetUrl,
-  keyFromUrl: keyFromUrl
+  keyFromUrl: keyFromUrl,
+  objectExists: objectExists,
+  copyObject: copyObject,
+  putBuffer: putBuffer,
+  imageProcess: imageProcess
 };
