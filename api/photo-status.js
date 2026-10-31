@@ -28,9 +28,10 @@ module.exports = async function (req, res) {
       return http.json(req, res, 400, { ok: false, error: "请填写作品标题" });
     }
 
+    /* select=*：旧库没有 reject_reason 列时天然降级（行上无该键），不用做错误重试 */
     var rows = await db.rest(
       "GET",
-      "photos?select=title,category,status,file_url,created_at&title=eq." +
+      "photos?select=*&title=eq." +
         encodeURIComponent(title) +
         (author ? "&author=eq." + encodeURIComponent(author) : "") +
         "&order=created_at.desc&limit=20"
@@ -39,13 +40,15 @@ module.exports = async function (req, res) {
     var items = (rows || []).map(function (r) {
       /* v2.0.12 安全整改：file_url 只对已发布作品返回——
          待审核/已下架的图不该被按标题反查到可访问的地址（桶公有读，URL 即入口）；
-         自查只需要「状态」，所以其余状态置空，功能不受影响 */
+         自查只需要「状态」，所以其余状态置空，功能不受影响。
+         v2.2.0：已下架作品回传拒绝理由（reject_reason），投稿同学不再一头雾水 */
       var approved = r.status === "approved";
       return {
         title: r.title,
         category: r.category,
         status: r.status,
         statusText: STATUS_TEXT[r.status] || r.status,
+        reject_reason: !approved && r.reject_reason ? r.reject_reason : "",
         file_url: approved ? r.file_url : "",
         created_at: r.created_at
       };

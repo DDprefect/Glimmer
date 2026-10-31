@@ -128,11 +128,18 @@ module.exports = async function (req, res) {
       return;
     }
 
-    /* ---------------- 单个状态动作 ---------------- */
+    /* ---------------- 单个状态动作 ----------------
+       unpublish 支持可选 reason（拒绝理由，v2.2.0）：落 reject_reason 列，
+       投稿人自查（photo-status）会看到「已下架（理由：xxx）」 */
     if (action === "approve" || action === "unpublish" || action === "restore") {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
       var status = action === "approve" ? "approved" : action === "unpublish" ? "offline" : "approved";
       await db.photos.setStatus(id, status);
+      var reasonSaved;
+      var reason = http.clean(body.reason, 100);
+      if (action === "unpublish" && reason) {
+        reasonSaved = await db.photos.setRejectReason(id, reason);
+      }
       /* 审核通过 → 自动打水印（保原图 + 公开位覆盖为带水印版）。
          失败不影响审核结果，watermarked=false + wmError 让前端提示重试 */
       var wm = null;
@@ -140,8 +147,25 @@ module.exports = async function (req, res) {
       http.json(req, res, 200, {
         ok: true,
         watermarked: !!(wm && wm.ok),
-        wmError: wm && !wm.ok ? wm.error : undefined
+        wmError: wm && !wm.ok ? wm.error : undefined,
+        reasonSaved: reasonSaved === undefined ? undefined : !!reasonSaved
       });
+      return;
+    }
+
+    /* ---------------- 精选 / 取消精选（v2.2.0） ----------------
+       精选作品在作品集与首页「最新收录」里排最前 */
+    if (action === "featured") {
+      if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
+      try {
+        await db.photos.setFeatured(id, !!body.featured);
+      } catch (e) {
+        if (/featured|PGRST204|42703|schema cache/i.test(String(e.message || ""))) {
+          return http.json(req, res, 500, { ok: false, error: "数据库缺 featured 列，请先在 Supabase SQL Editor 执行：alter table public.photos add column if not exists featured boolean default false;" });
+        }
+        throw e;
+      }
+      http.json(req, res, 200, { ok: true, featured: !!body.featured });
       return;
     }
 

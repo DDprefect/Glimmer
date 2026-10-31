@@ -383,6 +383,7 @@
         "</div>" +
         '<div class="lb__cap"><h3></h3><p></p>' +
           '<button class="lb__copy" type="button" hidden>复制本张链接</button>' +
+          '<button class="lb__copy lb__dl" type="button" hidden title="在浏览器中打开原图，右键或长按即可保存">下载原图</button>' +
         "</div>" +
         '<div class="lb__exif"></div>';
 
@@ -392,6 +393,7 @@
       countEl = $(".lb__count", el);
       exifEl  = $(".lb__exif", el);
       copyEl  = $(".lb__copy", el);
+      dlEl    = $(".lb__dl", el);
 
       /* 复制当前这张的深链。没有 id 的条目（理论上不会有）按钮不出现。 */
       copyEl.addEventListener("click", function () {
@@ -401,6 +403,14 @@
           function () { flash(copyEl, "链接已复制 ✓"); },
           function () { flash(copyEl, "复制失败，请手动复制地址栏"); }
         );
+      });
+
+      /* 下载原图（v2.2.0）：新标签页打开原图（带水印版），跨域 file:// 场景
+         也能用；浏览器对跨域资源忽略 download 属性，打开后右键/长按保存 */
+      dlEl.addEventListener("click", function () {
+        var it = list[idx];
+        if (!it || !it.src) return;
+        window.open(it.src, "_blank", "noopener");
       });
 
       $(".lb__close", el).addEventListener("click", close);
@@ -438,6 +448,7 @@
       countEl.textContent = String(idx + 1).padStart(2, "0") + " / " + String(list.length).padStart(2, "0");
       if (exifEl) exifEl.innerHTML = exifLine(it.shot);
       if (copyEl) copyEl.hidden = !workLink(it);
+      if (dlEl) dlEl.hidden = !it.src;
     }
 
     /* 拍摄信息行：机型 · 镜头 · 光圈 快门 ISO 焦段

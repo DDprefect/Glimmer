@@ -50,6 +50,10 @@ function photoSubmitted(p) {
       "",
       "请到管理后台审核：https://ltyzglimmer.top/admin.html"
     ].filter(Boolean).join("\n");
+    /* v2.2.0：desp 支持 markdown，嵌一张 400px 缩略图——干部在微信里直接看图 */
+    if (p.file_url) {
+      lines += "\n\n![缩略图](" + p.file_url + "?imageMogr2/thumbnail/400x)";
+    }
     return notify("新投稿待审核 · " + (p.title || ""), lines);
   } catch (e) {
     return Promise.resolve(false);

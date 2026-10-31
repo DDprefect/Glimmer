@@ -95,11 +95,14 @@
     var exifPart = exif
       ? " · " + [exif.camera, exif.aperture, exif.shutter, exif.iso].filter(Boolean).map(esc).join(" ")
       : "";
+    /* v2.2.0：精选角标 + 拒绝理由回显 */
     return esc(p.category) +
       (p.author ? " · " + esc(p.author) : "") +
       (p.shot_date ? " · 摄于 " + esc(p.shot_date) : "") +
       exifPart +
-      " · " + fmtTime(p.created_at);
+      " · " + fmtTime(p.created_at) +
+      (p.featured ? ' · <span class="admin-item__feat">⭐精选</span>' : "") +
+      (p.reject_reason ? " · 理由：" + esc(p.reject_reason) : "");
   }
 
   function editForm(p) {
@@ -121,14 +124,19 @@
     if (mode === "pending") {
       sel = '<label class="check admin-item__sel" title="选中批量处理"><input type="checkbox" class="batch-cb" data-id="' + p.id + '"></label>';
       ops = '<button class="admin-op admin-op--ok" type="button" data-act="approve" data-id="' + p.id + '">通过</button>' +
+            '<button class="admin-op" type="button" data-act="reject" data-id="' + p.id + '">拒绝</button>' +
+            '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else if (mode === "approved") {
       ops = '<button class="admin-op" type="button" data-act="edit" data-id="' + p.id + '">编辑</button>' +
             '<button class="admin-op" type="button" data-act="watermark" data-id="' + p.id + '" title="重打水印：公开图覆盖为带水印版，原图留在私有目录">打水印</button>' +
+            '<button class="admin-op" type="button" data-act="featured" data-id="' + p.id + '" data-feat="' + (p.featured ? "1" : "0") + '">' + (p.featured ? "取消精选" : "精选") + '</button>' +
+            '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op" type="button" data-act="unpublish" data-id="' + p.id + '">下架</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else {
       ops = '<button class="admin-op admin-op--ok" type="button" data-act="restore" data-id="' + p.id + '">恢复上架</button>' +
+            '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     }
     return '<article class="admin-item" data-id="' + p.id + '">' +
@@ -155,6 +163,17 @@
     $("#tab-approved").textContent = d.approved.length;
     $("#tab-offline").textContent = d.offline.length;
     $("#tab-subs").textContent = d.submissions.length;
+
+    /* 本月概览（v2.2.0）：按北京月份统计，与备份记账口径一致 */
+    var monthEl = $("#admin-month");
+    if (monthEl) {
+      var month = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 7);
+      var mPhotos = d.approved.concat(d.pending, d.offline).filter(function (p) { return (p.created_at || "").indexOf(month) === 0; }).length;
+      var mSubs = d.submissions.filter(function (s) { return (s.created_at || "").indexOf(month) === 0; }).length;
+      var mFeat = d.approved.filter(function (p) { return p.featured; }).length;
+      monthEl.textContent = "本月投稿 " + mPhotos + " 件 · 本月报名 " + mSubs + " 人 · 精选作品 " + mFeat + " 件";
+      monthEl.hidden = false;
+    }
 
     /* 待审核 */
     var bar = $("#batch-bar");
@@ -396,6 +415,33 @@
         }).catch(errHandler);
         return;
       }
+      if (act === "reject") {
+        /* v2.2.0：拒绝 = 下架 + 理由（理由会展示给投稿同学） */
+        var reason = window.prompt("拒绝理由（会展示给投稿同学；留空则取消）：");
+        if (!reason || !reason.trim()) return;
+        btn.disabled = true;
+        api("unpublish", { id: id, reason: reason.trim() }).then(function (j) {
+          showMsg(panelMsg, "已拒绝（作品移入已下架）。" +
+            (j && j.reasonSaved === false ? "注意：数据库缺 reject_reason 列，理由未保存。" : ""), "is-ok");
+          return load();
+        }).catch(errHandler);
+        return;
+      }
+      if (act === "featured") {
+        var toFeat = btn.getAttribute("data-feat") !== "1";
+        btn.disabled = true;
+        api("featured", { id: id, featured: toFeat }).then(function () {
+          showMsg(panelMsg, toFeat ? "已设为精选，作品集与首页将优先展示。" : "已取消精选。", "is-ok");
+          return load();
+        }).catch(errHandler);
+        return;
+      }
+      if (act === "replace") {
+        replaceId = id;
+        var rinp = document.getElementById("replace-file");
+        if (rinp) { rinp.value = ""; rinp.click(); }
+        return;
+      }
       if (act === "watermark") {
         btn.disabled = true;
         showMsg(panelMsg, "");
@@ -440,6 +486,90 @@
       }).catch(errHandler);
     });
   });
+
+  /* ---------------- 换图（v2.2.0）：选图 → 压缩 → api/replace ----------------
+     密码走 x-admin-pw 头（不进 URL 不落日志）；响应文本优先解析（v2.0.11 同款） */
+  var replaceId = null;
+  var replaceInput = document.getElementById("replace-file");
+  if (replaceInput) {
+    replaceInput.addEventListener("change", function () {
+      if (!replaceId) return;
+      var f = replaceInput.files && replaceInput.files[0];
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { showMsg(panelMsg, "请选择图片文件。", "is-err"); return; }
+      showMsg(panelMsg, "正在压缩并上传新图…", "");
+      compressForReplace(f).then(function (blob) {
+        if (!blob) throw new Error("图片压缩失败，换一张试试");
+        return fetch("api/replace?id=" + encodeURIComponent(replaceId), {
+          method: "POST",
+          headers: { "x-admin-pw": password, "Content-Type": "application/octet-stream" },
+          body: blob
+        }).then(function (r) {
+          return r.text().then(function (t) {
+            var j = null;
+            try { j = JSON.parse(t); } catch (e) { /* 非 JSON：HTML 错误页 */ }
+            if (r.status === 401) {
+              var err = new Error("密码不正确");
+              err.unauthorized = true;
+              throw err;
+            }
+            if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || "替换失败（HTTP " + r.status + "）");
+            return j;
+          });
+        });
+      }).then(function (j) {
+        showMsg(panelMsg, "图片已替换。" + (j.watermarked ? "已自动重打水印。" : "") +
+          (j.wmError ? "（" + j.wmError + "）" : ""), "is-ok");
+        replaceId = null;
+        return load();
+      }).catch(function (e) {
+        replaceId = null;
+        if (e && e.unauthorized) {
+          logout(true);
+          showMsg(loginMsg, "登录已过期，请重新输入管理密码。", "is-err");
+        } else {
+          showMsg(panelMsg, e.message || "替换失败", "is-err");
+        }
+      });
+    });
+  }
+
+  /* 压缩：与投稿页同思路（最长边 1600、JPEG 0.82），后台换图够用 */
+  function compressForReplace(file) {
+    function decode() {
+      if (window.createImageBitmap) {
+        return createImageBitmap(file, { imageOrientation: "from-image" }).catch(function () {
+          return createImageBitmap(file);
+        });
+      }
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("图片解码失败")); };
+        img.src = url;
+      });
+    }
+    return decode().then(function (bmp) {
+      var w = bmp.width || bmp.naturalWidth;
+      var h = bmp.height || bmp.naturalHeight;
+      if (!w || !h) throw new Error("无法读取图片尺寸");
+      var scale = Math.min(1, 1600 / Math.max(w, h));
+      var cw = Math.max(1, Math.round(w * scale));
+      var ch = Math.max(1, Math.round(h * scale));
+      var canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      var ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(bmp, 0, 0, cw, ch);
+      if (bmp.close) bmp.close();
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (b) { resolve(b); }, "image/jpeg", 0.82);
+      });
+    });
+  }
 
   /* ---------------- 事件：报名已联系切换 ---------------- */
   $("#subs-table").addEventListener("click", function (e) {

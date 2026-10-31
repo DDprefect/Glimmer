@@ -167,6 +167,8 @@ async function testGallery() {
   ok("灯箱展示 EXIF 拍摄参数", /NIKON ZR/.test(exifLine) && /f\/4/.test(exifLine) && /1\/50s/.test(exifLine) && /ISO 450/.test(exifLine) && /51mm/.test(exifLine), exifLine);
   ok("灯箱拍摄信息含拍摄日期", /2026-02-02/.test(exifLine), exifLine);
   ok("灯箱加载原图（非缩图）", !!lb && !/imageMogr2/.test(lb.querySelector("img").getAttribute("src") || ""), lb ? lb.querySelector("img").getAttribute("src") : "");
+  var dlBtn = lb ? lb.querySelector(".lb__dl") : null;
+  ok("灯箱有下载原图按钮（v2.2.0）", !!dlBtn && !dlBtn.hidden);
   dom.window.close(); dom2.window.close(); dom3.window.close();
 }
 
@@ -301,15 +303,19 @@ async function testUpload() {
   await new Promise(function (r) { setTimeout(r, 50); });
   ok("未选图时给出提示且不发请求", reqs.length === 0 && /选择要上传的图片/.test(d.getElementById("up-msg").textContent));
 
-  /* 状态查询交互 */
+  /* 状态查询交互（v2.2.0：已下架回传拒绝理由） */
   dom.window.fetch = function (url, opts) {
     reqs.push(url);
-    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, items: [{ title: "测试投稿", category: "校园纪实", status: "approved", statusText: "已发布", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/x.jpg", created_at: "2026-02-01T00:00:00Z" }] }); } });
+    return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, items: [
+      { title: "测试投稿", category: "校园纪实", status: "approved", statusText: "已发布", reject_reason: "", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/x.jpg", created_at: "2026-02-01T00:00:00Z" },
+      { title: "被拒的图", category: "校园纪实", status: "offline", statusText: "已下架", reject_reason: "画质不足", file_url: "", created_at: "2026-02-01T00:00:00Z" }
+    ] }); } });
   };
   d.getElementById("q-title").value = "测试投稿";
   d.getElementById("q-btn").click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("进度查询 → 请求 photo-status 且渲染结果", reqs.some(function (u) { return u === "api/photo-status"; }) && /已发布/.test(d.getElementById("q-result").textContent), d.getElementById("q-result").textContent);
+  ok("已下架作品显示拒绝理由（v2.2.0）", /已下架（理由：画质不足）/.test(d.getElementById("q-result").textContent), d.getElementById("q-result").textContent);
 
   /* 接口链路（压缩步骤在 jsdom 无 canvas 会 graceful 失败，验证不死页） */
   var fakeFile = new dom.window.File([new Uint8Array([1, 2, 3])], "t.jpg", { type: "image/jpeg" });
@@ -395,6 +401,9 @@ async function testAdmin() {
 
   ok("已发布卡片含下架/编辑钮", !!d.querySelector('#pane-approved button[data-act="unpublish"]') && !!d.querySelector('#pane-approved button[data-act="edit"]'));
   ok("已发布卡片含打水印重试钮（v2.1.0）", !!d.querySelector('#pane-approved button[data-act="watermark"]'));
+  ok("已发布卡片含精选与换图钮（v2.2.0）", !!d.querySelector('#pane-approved button[data-act="featured"]') && !!d.querySelector('#pane-approved button[data-act="replace"]'));
+  ok("待审核卡片含拒绝与换图钮（v2.2.0）", !!d.querySelector('#pane-pending button[data-act="reject"]') && !!d.querySelector('#pane-pending button[data-act="replace"]'));
+  ok("本月概览已渲染（v2.2.0）", /本月投稿 \d+ 件/.test((d.getElementById("admin-month") || {}).textContent || ""), (d.getElementById("admin-month") || {}).textContent);
   ok("已下架卡片含恢复钮", !!d.querySelector('#pane-offline button[data-act="restore"]'));
 
   /* 批量通过 */
@@ -430,6 +439,19 @@ async function testAdmin() {
   d.querySelector('#pane-approved button[data-act="watermark"]').click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点打水印 → 请求 watermark 动作", callLog.some(function (b) { return b && b.action === "watermark" && String(b.id) === "8"; }), JSON.stringify(callLog));
+
+  /* 拒绝（带理由，v2.2.0） */
+  callLog.length = 0;
+  dom.window.prompt = function () { return "构图重复"; };
+  d.querySelector('#pane-pending button[data-act="reject"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点拒绝 → 请求 unpublish 且带理由（v2.2.0）", callLog.some(function (b) { return b && b.action === "unpublish" && b.reason === "构图重复"; }), JSON.stringify(callLog));
+
+  /* 精选（v2.2.0） */
+  callLog.length = 0;
+  d.querySelector('#pane-approved button[data-act="featured"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点精选 → 请求 featured 动作（v2.2.0）", callLog.some(function (b) { return b && b.action === "featured" && b.featured === true; }), JSON.stringify(callLog));
 
   /* 审核通过 */
   var approveBtn = d.querySelector('#pane-pending button[data-act="approve"]');

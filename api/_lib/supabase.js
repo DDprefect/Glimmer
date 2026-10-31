@@ -54,9 +54,14 @@ function rest(method, path, body) {
 }
 
 var photos = {
-  /* 只返回已审核作品，新的在前 */
+  /* 只返回已审核作品；精选（featured）排最前，其余按时间倒序。
+     旧库还没有 featured 列时自动回退为纯时间排序（平滑升级） */
   approved: function () {
-    return rest("GET", "photos?select=*&status=eq.approved&order=created_at.desc");
+    return rest("GET", "photos?select=*&status=eq.approved&order=featured.desc,created_at.desc")
+      .catch(function (e) {
+        if (!/featured|PGRST204|42703|schema cache/i.test(String(e.message || ""))) throw e;
+        return rest("GET", "photos?select=*&status=eq.approved&order=created_at.desc");
+      });
   },
   pending: function () {
     return rest("GET", "photos?select=*&status=eq.pending&order=created_at.desc");
@@ -92,6 +97,20 @@ var photos = {
   /* 全量（后台导出用） */
   all: function () {
     return rest("GET", "photos?select=*&order=created_at.desc");
+  },
+  /* 拒绝理由（v2.2.0）：成功返回 true；旧库无列时静默降级返回 false，
+     让前端提示「理由未保存」 */
+  setRejectReason: function (id, reason) {
+    return rest("PATCH", "photos?id=eq." + encodeURIComponent(id), { reject_reason: reason || null })
+      .then(function () { return true; })
+      .catch(function (e) {
+        if (!/reject_reason|PGRST204|42703|schema cache/i.test(String(e.message || ""))) throw e;
+        return false;
+      });
+  },
+  /* 精选标记（v2.2.0）：列缺失时抛错，由调用方转成「请先执行建列 SQL」的明确提示 */
+  setFeatured: function (id, val) {
+    return rest("PATCH", "photos?id=eq." + encodeURIComponent(id), { featured: !!val });
   }
 };
 

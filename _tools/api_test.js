@@ -128,7 +128,11 @@ function startMockSupabase() {
     sawServiceKey: false,
     rejectExifCol: false,
     /* 模拟旧库没有 handled 列：select 里含 handled 的查询一律 42703 */
-    rejectHandledCol: false
+    rejectHandledCol: false,
+    /* v2.2.0 旧库降级开关（均一次性触发） */
+    rejectFeaturedCol: false,   /* GET photos 带 featured 排序 → 42703 */
+    rejectFeatPatchCol: false,  /* PATCH featured → 42703 */
+    rejectRejectCol: false      /* PATCH reject_reason → 42703 */
   };
 
   var server = http.createServer(function (req, res) {
@@ -185,8 +189,21 @@ function startMockSupabase() {
           return send(400, { code: "42703", message: "column submissions.handled does not exist" });
         }
         var rows = table.filter(matches);
-        if (u.searchParams.get("order") === "created_at.desc") {
-          rows = rows.slice().sort(function (a, b) { return a.created_at < b.created_at ? 1 : -1; });
+        var ord = u.searchParams.get("order") || "";
+        /* v2.2.0：featured 排序降级模拟 */
+        if (state.rejectFeaturedCol && ord.indexOf("featured") !== -1) {
+          state.rejectFeaturedCol = false;
+          return send(400, { code: "42703", message: "column photos.featured does not exist" });
+        }
+        if (ord) {
+          rows = rows.slice().sort(function (a, b) {
+            if (ord.indexOf("featured.desc") !== -1) {
+              var fa = a.featured ? 1 : 0;
+              var fb = b.featured ? 1 : 0;
+              if (fa !== fb) return fb - fa;
+            }
+            return a.created_at < b.created_at ? 1 : -1;
+          });
         }
         return send(200, rows);
       }
@@ -209,6 +226,15 @@ function startMockSupabase() {
       }
       if (req.method === "PATCH") {
         var patch = JSON.parse(bodyText || "{}");
+        /* v2.2.0 旧库降级模拟（一次性） */
+        if (state.rejectFeatPatchCol && patch.featured !== undefined) {
+          state.rejectFeatPatchCol = false;
+          return send(400, { code: "42703", message: "column photos.featured does not exist" });
+        }
+        if (state.rejectRejectCol && patch.reject_reason !== undefined) {
+          state.rejectRejectCol = false;
+          return send(400, { code: "42703", message: "column photos.reject_reason does not exist" });
+        }
         var pf = idFilter();
         table.forEach(function (r) { if (!pf || pf(r)) Object.assign(r, patch); });
         return send(204, null);
@@ -239,7 +265,8 @@ function startApiServer() {
     "/api/register-status": require(path.join(ROOT, "api/register-status.js")),
     "/api/keepalive": require(path.join(ROOT, "api/keepalive.js")),
     "/api/upload": require(path.join(ROOT, "api/upload.js")),
-    "/api/backup": require(path.join(ROOT, "api/backup.js"))
+    "/api/backup": require(path.join(ROOT, "api/backup.js")),
+    "/api/replace": require(path.join(ROOT, "api/replace.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -888,6 +915,70 @@ async function testApi() {
   ok("删除作品 → _original/ 原图一并清理", r.status === 200 && r.json.ok && cosCalls.some(function (c) {
     return c.method === "DELETE" && c.url.indexOf("myqcloud.com/_original/") !== -1;
   }));
+  rl._buckets.clear();
+
+  /* ---------- v2.2.0 拒绝理由 / 精选 / 替换图片 / 通知缩略图 ---------- */
+  rl._buckets.clear();
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("拒绝理由作品") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg());
+  var rjId = r.json.photo.id;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "unpublish", id: String(rjId), reason: "构图重复，换一张更好" });
+  ok("拒绝 → offline 且理由落库", r.status === 200 && mock.state.photos.some(function (p) {
+    return p.id === rjId && p.status === "offline" && p.reject_reason === "构图重复，换一张更好";
+  }), JSON.stringify(r.json).slice(0, 120));
+  ok("拒绝返回 reasonSaved=true", r.json.reasonSaved === true);
+  r = await call(P, "POST", "/api/photo-status", { title: "拒绝理由作品" });
+  ok("photo-status 已下架回传拒绝理由且不带图址", r.status === 200 && r.json.items[0].reject_reason === "构图重复，换一张更好" && r.json.items[0].file_url === "", JSON.stringify(r.json.items).slice(0, 160));
+
+  /* 旧库缺 reject_reason 列：下架仍成功，但提示理由未保存 */
+  mock.state.rejectRejectCol = true;
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("理由降级作品") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg());
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "unpublish", id: String(r.json.photo.id), reason: "x" });
+  ok("旧库缺 reject_reason 列 → 下架成功且 reasonSaved=false", r.status === 200 && r.json.reasonSaved === false, JSON.stringify(r.json).slice(0, 120));
+
+  /* 精选 */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "featured", id: "3", featured: true });
+  ok("精选 → 200 且落库", r.status === 200 && r.json.featured === true && mock.state.photos.some(function (p) { return p.id === 3 && p.featured === true; }), JSON.stringify(r.json).slice(0, 120));
+  r = await call(P, "GET", "/api/photos");
+  ok("作品列表精选排最前", r.status === 200 && r.json.ok && r.json.photos[0].id === 3, "first=" + (r.json.photos[0] || {}).id);
+  mock.state.rejectFeaturedCol = true;
+  r = await call(P, "GET", "/api/photos");
+  ok("旧库缺 featured 列 → 列表回退时间排序不报错", r.status === 200 && r.json.ok && r.json.photos.length > 0);
+  mock.state.rejectFeatPatchCol = true;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "featured", id: "3", featured: false });
+  ok("缺 featured 列时给出建列 SQL 提示", r.status === 500 && /alter table/.test(r.json.error || ""), JSON.stringify(r.json).slice(0, 160));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "featured", id: "3", featured: false });
+  ok("取消精选 → 200", r.status === 200 && r.json.featured === false);
+
+  /* 通知带缩略图 */
+  notifyCalls.length = 0;
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("通知缩略图作品") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg());
+  ok("投稿推送带缩略图（数据万象 400px）", notifyCalls.some(function (u) {
+    return u.indexOf("sctapi.ftqq.com") !== -1 && decodeURIComponent(u).indexOf("imageMogr2/thumbnail/400x") !== -1;
+  }), notifyCalls.join(" ; ").slice(0, 200));
+
+  /* 替换图片 */
+  rl._buckets.clear();
+  cosCalls.length = 0;
+  r = await callRaw(P, "POST", "/api/replace", fakeJpeg(), { "x-admin-pw": "glimmer2026" });
+  ok("replace 缺 id → 400", r.status === 400);
+  r = await callRaw(P, "POST", "/api/replace?id=999", fakeJpeg(), { "x-admin-pw": "glimmer2026" });
+  ok("replace 不存在的作品 → 404", r.status === 404);
+  r = await callRaw(P, "POST", "/api/replace?id=" + wmId2, fakeJpeg(), { "x-admin-pw": "wrongpw" });
+  ok("replace 错密码 → 401", r.status === 401);
+  r = await callRaw(P, "POST", "/api/replace?id=" + wmId2, Buffer.from([1, 2, 3]), { "x-admin-pw": "glimmer2026" });
+  ok("replace 非 JPEG → 400", r.status === 400);
+  r = await callRaw(P, "POST", "/api/replace?id=" + wmId2 + "&shot_date=2026-10-31", fakeJpeg(), { "x-admin-pw": "glimmer2026" });
+  ok("replace → 200 且已发布作品自动重打水印", r.status === 200 && r.json.ok && r.json.watermarked === true, JSON.stringify(r.json).slice(0, 160));
+  ok("replace 的 _original 私有原图同步覆盖", cosCalls.some(function (c) {
+    return c.method === "PUT" && c.url.indexOf("myqcloud.com/_original/") !== -1;
+  }));
+  ok("replace 拍摄日期已更新", mock.state.photos.some(function (p) { return p.id === wmId2 && p.shot_date === "2026-10-31"; }));
   rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */

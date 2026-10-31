@@ -61,6 +61,7 @@
       </div>
       <button class="btn btn--ghost btn--sm" type="button" id="admin-logout">退出登录</button>
     </div>
+    <p class="admin-month" id="admin-month" hidden></p>
 
     <div class="admin-tabs" role="tablist">
       <button class="admin-tab is-on" type="button" data-tab="pending" role="tab">待审核 <b id="tab-pending">0</b></button>
@@ -114,6 +115,8 @@
 </section>
 
 <div data-foot></div>
+
+<input type="file" id="replace-file" accept="image/*" hidden aria-hidden="true">
 
 <script src="assets/js/site.js"></script>
 <script src="assets/js/admin.js"></script>

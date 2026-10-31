@@ -268,10 +268,12 @@
             var link = it.status === "approved"
               ? '<a class="up-q__link" href="' + G.esc(it.file_url) + '" target="_blank" rel="noopener">查看作品 →</a>'
               : "";
+            /* v2.2.0：被拒绝/下架的作品显示理由，不再让同学一头雾水 */
+            var st = G.esc(it.statusText) + (it.reject_reason ? "（理由：" + G.esc(it.reject_reason) + "）" : "");
             return '<div class="up-q' + badge + '">' +
               "<b>" + G.esc(it.title) + "</b>" +
               "<span class='up-q__cat'>" + G.esc(it.category) + "</span>" +
-              "<span class='up-q__st'>" + G.esc(it.statusText) + "</span>" +
+              "<span class='up-q__st'>" + st + "</span>" +
               link +
             "</div>";
           }).join("");

@@ -2613,3 +2613,8 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 @media (max-width: 700px) {
   .gbar__submit { width: 100%; justify-content: center; }
 }
+
+/* ===== v2.2.0：后台月度统计行 / 精选角标 / 灯箱下载按钮 ===== */
+.admin-month { margin: -4px 0 18px; font-size: .85rem; opacity: .72; }
+.admin-item__feat { color: var(--gold); font-weight: 600; }
+.lb__cap .lb__dl { margin-left: 10px; }
