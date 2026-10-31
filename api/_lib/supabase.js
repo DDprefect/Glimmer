@@ -27,10 +27,17 @@ function rest(method, path, body) {
   if (body !== undefined && (method === "POST" || method === "PATCH")) {
     headers.Prefer = "return=representation";
   }
+  /* v2.2.1 诊断：网络层失败（fetch reject）若裸抛，前端只会看到一句
+     「fetch failed」，分不清是数据库还是存储出的问题——这里统一打上
+     「数据库」标签并带上底层错误码（ECONNREFUSED / ENOTFOUND 等）。
+     注意 .catch 只包住 fetch 本身，!ok 的业务错误在后面的 .then 里抛，不受影响 */
   return fetch(c.url + "/rest/v1/" + path, {
     method: method,
     headers: headers,
     body: body === undefined ? undefined : JSON.stringify(body)
+  }).catch(function (e) {
+    var code = e && e.cause && (e.cause.code || e.cause.message);
+    throw new Error("数据库网络连接失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
   }).then(function (res) {
     return res.text().then(function (text) {
       var data = null;

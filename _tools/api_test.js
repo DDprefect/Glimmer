@@ -982,6 +982,15 @@ async function testApi() {
   rl._buckets.clear();
 
   /* ---------- 协议层 ---------- */
+  /* v2.2.1 诊断：数据库网络失败必须带依赖名与错误码，不许裸抛 fetch failed */
+  var savedDbUrl = process.env.SUPABASE_URL;
+  process.env.SUPABASE_URL = "http://127.0.0.1:59999"; /* 无人监听 → ECONNREFUSED */
+  r = await call(P, "GET", "/api/keepalive");
+  ok("数据库网络失败 → 报「数据库网络连接失败」并带错误码", r.status === 500 && /数据库网络连接失败（.+）/.test(r.json.error || ""), JSON.stringify(r.json).slice(0, 160));
+  process.env.SUPABASE_URL = savedDbUrl;
+  r = await call(P, "GET", "/api/keepalive");
+  ok("恢复后 keepalive 正常", r.status === 200 && r.json.ok === true);
+
   r = await call(P, "OPTIONS", "/api/photos");
   ok("OPTIONS 预检 → 204 + CORS 头", r.status === 204 && r.headers["access-control-allow-origin"] === "https://ltyzglimmer.top");
 

@@ -113,12 +113,16 @@ module.exports = async function (req, res) {
     var key =
       category + "/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
 
-    /* 服务端直写 COS（无浏览器跨域限制；签名与密钥都不出服务端） */
+    /* 服务端直写 COS（无浏览器跨域限制；签名与密钥都不出服务端）。
+       v2.2.1 诊断：网络层失败打上「存储」标签 + 底层错误码，不再裸抛 fetch failed */
     var signed = cos.sign("put", key, 600);
     var put = await fetch(signed.url, {
       method: "PUT",
       body: buf,
       headers: { "Content-Type": "image/jpeg" }
+    }).catch(function (e) {
+      var code = e && e.cause && (e.cause.code || e.cause.message);
+      throw new Error("存储网络连接失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
     });
     if (!put.ok) {
       throw new Error("图片写入存储失败（HTTP " + put.status + "），请稍后重试或联系干部");
