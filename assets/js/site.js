@@ -359,7 +359,7 @@
 
   /* ---------------------------------------------------------- 灯箱 */
   var LB = (function () {
-    var el, imgEl, capEl, countEl, exifEl, copyEl, dlEl, list = [], idx = 0;
+    var el, imgEl, capEl, countEl, exifEl, copyEl, dlEl, loadEl, list = [], idx = 0;
 
     function build() {
       el = document.createElement("div");
@@ -382,6 +382,7 @@
           "</button>" +
         "</div>" +
         '<div class="lb__cap"><h3></h3><p></p>' +
+          '<span class="lb__loading" hidden>加载中…</span>' +
           '<button class="lb__copy" type="button" hidden>复制本张链接</button>' +
           '<button class="lb__copy lb__dl" type="button" hidden title="在浏览器中打开原图，右键或长按即可保存">下载原图</button>' +
         "</div>" +
@@ -394,6 +395,7 @@
       exifEl  = $(".lb__exif", el);
       copyEl  = $(".lb__copy", el);
       dlEl    = $(".lb__dl", el);
+      loadEl  = $(".lb__loading", el);
 
       /* 复制当前这张的深链。没有 id 的条目（理论上不会有）按钮不出现。 */
       copyEl.addEventListener("click", function () {
@@ -441,14 +443,17 @@
     function render() {
       var it = list[idx];
       if (!it) return;
-      /* v2.2.8：大图加载状态——切换时 src 换成未下载的全尺寸图，浏览器会一直
-         显示上一张已加载的图直到新图解码完成，看起来就像「只换名字不换图」。
-         现在未就绪时半透明提示 + 就绪后恢复，同时预加载相邻两张让切换即时。 */
-      imgEl.onload = function () { imgEl.classList.remove("is-loading"); };
+      /* v2.3.1：加载状态改为文字提示（半透明叠在模糊背景上会发红，观感差）。
+         未就绪时显示「加载中…」，就绪即隐藏；不再改变图片透明度。 */
+      imgEl.onload = function () {
+        imgEl.classList.remove("is-loading");
+        if (loadEl) loadEl.hidden = true;
+      };
       imgEl.onerror = imgEl.onload;
       if (!imgEl.complete) imgEl.classList.add("is-loading");
       imgEl.src = it.src;
       if (imgEl.complete) imgEl.classList.remove("is-loading");
+      if (loadEl) loadEl.hidden = imgEl.complete;
       imgEl.alt = it.title || "";
       capEl.textContent = it.title || "";
       $(".lb__cap p", el).textContent = it.sub || it.group || "";
