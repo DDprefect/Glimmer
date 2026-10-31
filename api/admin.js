@@ -77,7 +77,21 @@ async function watermarkForId(id, req) {
     if (!row || !row.file_url) return { ok: false, error: "未找到作品图片地址" };
     var key = cos.keyFromUrl(row.file_url);
     if (!key) return { ok: false, error: "图片地址不属于本站存储桶，跳过水印" };
-    return await watermarkLib.applyWatermark(key);
+    var r = await watermarkLib.applyWatermark(key);
+    /* v2.3.2：首次打水印会换文件名（xxx-wm.jpg）——数据库改指新地址
+       （新 URL 天然绕过所有人浏览器里缓存的无水印旧字节），
+       同时删除旧的无水印公开对象，让干净原图彻底从公网消失 */
+    if (r.changed) {
+      var newUrl = cos.publicUrl(r.key);
+      await db.photos.update(id, { file_url: newUrl });
+      try {
+        var sDel = cos.sign("delete", key, 600);
+        await fetch(sDel.url, { method: "DELETE" });
+      } catch (eDel) {
+        /* 旧对象删不掉不影响主流程，但会在桶里留一个无水印副本（下次重试再清） */
+      }
+    }
+    return r;
   } catch (e) {
     try { await notifyLib.errorOccurred(req, "作品打水印", e.message); } catch (e2) { /* 吞掉 */ }
     return { ok: false, error: e.message || "打水印失败" };

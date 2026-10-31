@@ -867,6 +867,12 @@ async function testApi() {
   cosCalls.length = 0;
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "approve", id: String(wmId) });
   ok("approve → 200 且 watermarked=true", r.status === 200 && r.json.ok && r.json.watermarked === true, JSON.stringify(r.json).slice(0, 160));
+  ok("打水印后数据库改指 -wm 新地址（缓存自破）", mock.state.photos.some(function (p) {
+    return p.id === wmId && /-wm\.jpg$/.test(p.file_url || "");
+  }), JSON.stringify((mock.state.photos.filter(function (p) { return p.id === wmId; })[0] || {}).file_url));
+  ok("旧的无水印公开对象已删除", cosCalls.some(function (c) {
+    return c.method === "DELETE" && c.url.indexOf("-wm") === -1 && c.url.indexOf("_original") === -1 && c.url.indexOf("myqcloud.com/") !== -1;
+  }), cosCalls.filter(function (c) { return c.method === "DELETE"; }).map(function (c) { return c.url.slice(0, 70); }).join(" ; "));
   ok("原图已复制到 _original/（x-cos-copy-source 签入）", cosCalls.some(function (c) {
     return c.method === "PUT" && c.headers["x-cos-copy-source"] && c.url.indexOf("myqcloud.com/_original/") !== -1;
   }), cosCalls.map(function (c) { return c.method + " " + c.url.slice(0, 90); }).join(" ; "));

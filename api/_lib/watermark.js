@@ -61,9 +61,24 @@ async function ensureLogo() {
   await cos.putBuffer(WM_KEY, Buffer.from(WM_IMAGE_B64, "base64"), "image/png");
 }
 
-/* 公开 key → 私有原图 key */
+/* 公开 key → 私有原图 key（v2.3.2 起公开位带 -wm 后缀，原图按无后缀的原 key 存） */
+var WM_SUFFIX = "-wm";
+
+function isWatermarked(key) {
+  return new RegExp(WM_SUFFIX.replace("-", "\\-") + "\\.[A-Za-z0-9]+$").test(key);
+}
+function stripWm(key) {
+  return String(key).replace(new RegExp(WM_SUFFIX.replace("-", "\\-") + "(\\.[A-Za-z0-9]+)$"), "$1");
+}
+/* 首次打水印：原 key → key-wm.jpg（换文件名 = 新 URL，天然绕过浏览器缓存，
+   且数据库改指新地址后旧的无水印副本会被删除——网上不再有无水印原图可下载） */
+function watermarkedKeyOf(key) {
+  if (isWatermarked(key)) return key;
+  return String(key).replace(/(\.[A-Za-z0-9]+)$/, WM_SUFFIX + "$1");
+}
+
 function originalKeyOf(publicKey) {
-  return ORIGINAL_PREFIX + publicKey;
+  return ORIGINAL_PREFIX + stripWm(publicKey);
 }
 
 /* v2.3.1 结果校验：处理请求返回 200 不代表水印真打上了——水印图取不到时
@@ -86,16 +101,21 @@ async function verifyProcessed(publicKey, originalKey) {
   }
 }
 
-/* 审核通过时调用；也可对已发布作品重试。返回 { ok, originalKey } 或抛错 */
+/* 审核通过时调用；也可对已发布作品重试。
+   返回 { ok, originalKey, key, changed }：
+   key = 水印版公开 key（首次为 xxx-wm.jpg），changed=true 表示换了文件名，
+   调用方需把数据库 file_url 改到新地址并删除旧的无水印公开对象。 */
 async function applyWatermark(publicKey) {
   await ensureLogo();
+  var baseKey = stripWm(publicKey);
   var oKey = originalKeyOf(publicKey);
   if (!(await cos.objectExists(oKey))) {
-    await cos.copyObject(publicKey, oKey); /* 第一步永远是保原图 */
+    await cos.copyObject(baseKey, oKey); /* 第一步永远是保原图 */
   }
-  await cos.imageProcess(oKey, publicKey, buildRule()); /* 处理结果覆盖公开位 */
-  await verifyProcessed(publicKey, oKey); /* 结果必须真的变了，否则显式失败 */
-  return { ok: true, originalKey: oKey };
+  var destKey = watermarkedKeyOf(publicKey);
+  await cos.imageProcess(oKey, destKey, buildRule()); /* 处理结果写到 destKey */
+  await verifyProcessed(destKey, oKey); /* 结果必须真的变了，否则显式失败 */
+  return { ok: true, originalKey: oKey, key: destKey, changed: destKey !== publicKey };
 }
 
 module.exports = {
