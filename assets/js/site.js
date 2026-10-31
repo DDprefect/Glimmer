@@ -697,8 +697,33 @@
     $$('link[rel="stylesheet"][media="print"]').forEach(function (l) { l.media = "all"; });
   }
 
+  /* ---------------------------------------------------------- 错误可见化
+     v2.2.4 临时诊断：任何未捕获的 JS 错误 / Promise 拒绝，都在页面左下角
+     弹一条红字（15 秒后自动消失）。定位「点击无反应」类故障用——
+     不需要用户会按 F12。问题解决后整段移除。 */
+  function errorTrap() {
+    if (SHOT) return;
+    function show(msg) {
+      var b = document.createElement("div");
+      b.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99999;max-width:86vw;" +
+        "background:#B03A22;color:#fff;font:12px/1.6 Consolas,monospace;padding:8px 12px;" +
+        "border-radius:8px;word-break:break-all;box-shadow:0 4px 16px rgba(0,0,0,.35)";
+      b.textContent = "JS错误：" + msg;
+      document.body.appendChild(b);
+      setTimeout(function () { b.remove(); }, 15000);
+    }
+    window.addEventListener("error", function (e) {
+      show((e.message || "未知错误") + " @ " + String(e.filename || "").split("/").pop() + ":" + e.lineno);
+    });
+    window.addEventListener("unhandledrejection", function (e) {
+      var r = e.reason;
+      show("Promise未处理：" + ((r && (r.message || r.code)) || String(r)).slice(0, 200));
+    });
+  }
+
   /* ---------------------------------------------------------- 启动 */
   function boot() {
+    errorTrap();
     flipFonts();
     curtain();
     renderNav();
