@@ -872,12 +872,12 @@ async function testApi() {
   }), cosCalls.map(function (c) { return c.method + " " + c.url.slice(0, 90); }).join(" ; "));
   var wmProc = cosCalls.filter(function (c) { return c.method === "POST" && c.url.indexOf("&image_process") !== -1; })[0];
   ok("CI 持久化处理已发起（POST image_process）", !!wmProc);
-  ok("Pic-Operations 规则含 logo 水印+盲水印且 fileid 已编码", (function () {
+  ok("Pic-Operations 规则含 logo 水印+盲水印且 fileid 为绝对路径", (function () {
     try {
       var j = JSON.parse(wmProc.headers["Pic-Operations"]);
       return j.rules[0].rule.indexOf("watermark/1/image/") !== -1 &&
              j.rules[0].rule.indexOf("|watermark/3/type/3/text/") !== -1 &&
-             j.rules[0].fileid.indexOf("%") !== -1;
+             j.rules[0].fileid.charAt(0) === "/" && j.rules[0].fileid.indexOf("%") !== -1;
     } catch (e) { return false; }
   })(), wmProc ? String(wmProc.headers["Pic-Operations"]).slice(0, 120) : "no proc");
 

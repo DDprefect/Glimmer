@@ -2640,3 +2640,8 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 }
 /* 灯箱底部两颗按钮在窄屏换行时留出呼吸 */
 .lb__cap { row-gap: 10px; }
+
+/* v2.2.6：灯箱舞台修复——place-items:center 使舞台高度塌缩为图片自身高度，
+   max-height:100% 失去参照，竖图直接溢出视口盖住信息行。改为强制拉伸舞台、
+   裁掉溢出，图片在舞台内完整可见。 */
+.lb__stage { align-self: stretch; overflow: hidden; }

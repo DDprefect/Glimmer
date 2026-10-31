@@ -193,12 +193,16 @@ function putBuffer(key, buf, contentType) {
 }
 
 /* 数据万象·云上图片持久化处理（POST image_process + Pic-Operations 头，需签入）。
-   官方语义：fileid 与 srcKey 相同时，处理结果覆盖原文件。
+   官方语义：fileid 不以 / 开头时相对源对象所在目录解析——源在 _original/ 深处时
+   输出会写进错误路径，因此 fileid 一律用「绝对路径」（/ 开头）保证覆盖 destKey。
    rule 为处理参数串，多个操作用管道符 | 串联（如 水印|盲水印）。 */
 function imageProcess(srcKey, destKey, rule) {
   var pic = JSON.stringify({
     is_pic_info: 1,
-    rules: [{ fileid: camSafeUrlEncode(destKey), rule: rule }]
+    rules: [{
+      fileid: "/" + encodeURIComponent(destKey).replace(/%2F/g, "/"),
+      rule: rule
+    }]
   });
   var s = sign("post", srcKey, 600, { "Pic-Operations": pic });
   return fetch(s.url + "&image_process", {
