@@ -359,7 +359,7 @@
 
   /* ---------------------------------------------------------- 灯箱 */
   var LB = (function () {
-    var el, imgEl, capEl, countEl, exifEl, copyEl, list = [], idx = 0;
+    var el, imgEl, capEl, countEl, exifEl, copyEl, dlEl, list = [], idx = 0;
 
     function build() {
       el = document.createElement("div");
