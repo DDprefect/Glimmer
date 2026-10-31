@@ -559,6 +559,10 @@ async function testCommons() {
   ok("页脚 QQ 号就位", copies[0].getAttribute("data-copy") === "1159554310" && /1159554310/.test(copies[0].textContent));
   ok("页脚抖音号就位", copies[1].getAttribute("data-copy") === "ltyz_GLIMMER" && /ltyz_GLIMMER/.test(copies[1].textContent));
   ok("页脚有投稿与关注入口", !!d.querySelector('.foot a[href="upload.html"]') && !!d.querySelector('.foot a[href="share.html"]'));
+  /* v2.3.3：页脚两列不得重复同一页面（此前 投稿/分享/加入 各出现两次） */
+  var footHrefs = Array.prototype.map.call(d.querySelectorAll(".foot__links a"), function (a) { return a.getAttribute("href"); });
+  var dupHrefs = footHrefs.filter(function (h, i) { return footHrefs.indexOf(h) !== i; });
+  ok("页脚链接无重复（v2.3.3）", dupHrefs.length === 0 && footHrefs.length === 6, "重复：" + dupHrefs.join(",") + " | 总数：" + footHrefs.length);
   dom.window.close();
 
   /* ---- 作品集：常驻投稿按钮 + 灯箱复制深链 ---- */

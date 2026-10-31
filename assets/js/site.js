@@ -176,15 +176,26 @@
           "<div>" +
             "<h4>浏览</h4>" +
             '<div class="foot__links">' +
-              NAV.map(function (n) { return '<a href="' + n.href + '">' + n.label + "</a>"; }).join("") +
+              /* v2.3.3：浏览列只放「看」的页面（首页/作品集/关于我们）。
+                 投稿 / 分享 / 加入属于动作页，统一放在右侧「联系我们」——
+                 此前两列都渲染了同一批链接，三个页面各重复出现一次。
+                 导航调整仍只改上面的 NAV 数组即可。 */
+              NAV.filter(function (n) {
+                return ["upload.html", "join.html", "share.html"].indexOf(n.href) === -1;
+              }).map(function (n) {
+                return '<a href="' + n.href + '">' + n.label + "</a>";
+              }).join("") +
             "</div>" +
           "</div>" +
           "<div>" +
-            "<h4>联系我们</h4>" +
+            "<h4>参与与联系</h4>" +
             '<div class="foot__links">' +
-              '<a href="join.html">招新与报名</a>' +
-              '<a href="upload.html">作品投稿</a>' +
-              '<a href="share.html">关注与分享</a>' +
+              /* 动作页：从 NAV 里取名称与顺序，保证和导航永远一致 */
+              NAV.filter(function (n) {
+                return ["upload.html", "join.html", "share.html"].indexOf(n.href) !== -1;
+              }).map(function (n) {
+                return '<a href="' + n.href + '">' + n.label + "</a>";
+              }).join("") +
             "</div>" +
             /* 账号可以直接点：复制比抄写靠谱，手机上也省事 */
             '<div class="foot__acct">' +
@@ -721,33 +732,8 @@
     $$('link[rel="stylesheet"][media="print"]').forEach(function (l) { l.media = "all"; });
   }
 
-  /* ---------------------------------------------------------- 错误可见化
-     v2.2.4 临时诊断：任何未捕获的 JS 错误 / Promise 拒绝，都在页面左下角
-     弹一条红字（15 秒后自动消失）。定位「点击无反应」类故障用——
-     不需要用户会按 F12。问题解决后整段移除。 */
-  function errorTrap() {
-    if (SHOT) return;
-    function show(msg) {
-      var b = document.createElement("div");
-      b.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99999;max-width:86vw;" +
-        "background:#B03A22;color:#fff;font:12px/1.6 Consolas,monospace;padding:8px 12px;" +
-        "border-radius:8px;word-break:break-all;box-shadow:0 4px 16px rgba(0,0,0,.35)";
-      b.textContent = "JS错误：" + msg;
-      document.body.appendChild(b);
-      setTimeout(function () { b.remove(); }, 15000);
-    }
-    window.addEventListener("error", function (e) {
-      show((e.message || "未知错误") + " @ " + String(e.filename || "").split("/").pop() + ":" + e.lineno);
-    });
-    window.addEventListener("unhandledrejection", function (e) {
-      var r = e.reason;
-      show("Promise未处理：" + ((r && (r.message || r.code)) || String(r)).slice(0, 200));
-    });
-  }
-
   /* ---------------------------------------------------------- 启动 */
   function boot() {
-    errorTrap();
     flipFonts();
     curtain();
     renderNav();
