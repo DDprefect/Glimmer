@@ -268,7 +268,7 @@ function call(port, method, path, payload, headers) {
         path: path,
         method: method,
         headers: Object.assign(
-          { "Content-Type": "application/json", Origin: "https://lityzglimmer.top" },
+          { "Content-Type": "application/json", Origin: "https://ltyzglimmer.top" },
           headers || {},
           data ? { "Content-Length": Buffer.byteLength(data) } : {}
         )
@@ -300,7 +300,7 @@ function callRaw(port, method, path, bodyBuf, headers) {
         path: path,
         method: method,
         headers: Object.assign(
-          { "Content-Type": "application/octet-stream", Origin: "https://lityzglimmer.top" },
+          { "Content-Type": "application/octet-stream", Origin: "https://ltyzglimmer.top" },
           headers || {},
           bodyBuf ? { "Content-Length": bodyBuf.length } : {}
         )
@@ -592,11 +592,11 @@ async function testApi() {
   ok("upload 非 JPEG 魔数 → 400", r.status === 400 && /JPG/.test(r.json.error || ""), JSON.stringify(r.json));
 
   /* ---------- 来源白名单（2026-10-25 放宽：http/端口/多级 vercel.app/localhost/null 放行） ---------- */
-  ok("白名单：站点 https 主域放行", httpLib.originAllowedValue("https://lityzglimmer.top") === true);
-  ok("白名单：站点 www 子域放行", httpLib.originAllowedValue("https://www.lityzglimmer.top") === true);
-  ok("白名单：站点 http 放行（用户实测被误拦的场景）", httpLib.originAllowedValue("http://www.lityzglimmer.top") === true);
-  ok("白名单：站点带端口放行", httpLib.originAllowedValue("https://lityzglimmer.top:8443") === true);
-  ok("白名单：多级子域放行", httpLib.originAllowedValue("https://foo.bar.lityzglimmer.top") === true);
+  ok("白名单：站点 https 主域放行", httpLib.originAllowedValue("https://ltyzglimmer.top") === true);
+  ok("白名单：站点 www 子域放行", httpLib.originAllowedValue("https://www.ltyzglimmer.top") === true);
+  ok("白名单：站点 http 放行（用户实测被误拦的场景）", httpLib.originAllowedValue("http://www.ltyzglimmer.top") === true);
+  ok("白名单：站点带端口放行", httpLib.originAllowedValue("https://ltyzglimmer.top:8443") === true);
+  ok("白名单：多级子域放行", httpLib.originAllowedValue("https://foo.bar.ltyzglimmer.top") === true);
   ok("白名单：单级 vercel.app 放行", httpLib.originAllowedValue("https://glimmer-abc123.vercel.app") === true);
   ok("白名单：多级 vercel.app 放行", httpLib.originAllowedValue("https://foo.bar.vercel.app") === true);
   ok("白名单：localhost 放行", httpLib.originAllowedValue("http://localhost:8848") === true);
@@ -605,18 +605,18 @@ async function testApi() {
   ok("白名单：无 Origin 放行（非浏览器客户端）", httpLib.originAllowedValue(undefined) === true);
   ok("白名单：外部 https 域拦截", httpLib.originAllowedValue("https://evil.example.com") === false);
   ok("白名单：外部 http 域拦截", httpLib.originAllowedValue("http://evil.example.com") === false);
-  ok("白名单：仿冒后缀域拦截", httpLib.originAllowedValue("https://lityzglimmer.top.evil.com") === false);
+  ok("白名单：仿冒后缀域拦截", httpLib.originAllowedValue("https://ltyzglimmer.top.evil.com") === false);
   /* v2.0.9：网络侧代理/安全软件会往 Origin 头里塞不可见字符（用户手机 5G 实测被误拦），
      全角标点先规范化成 ASCII、其余非可见字符剥掉，之后按正常域名放行 */
-  ok("白名单：尾部空格剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top ") === true);
-  ok("白名单：首部空格剥除后放行", httpLib.originAllowedValue(" https://www.lityzglimmer.top") === true);
-  ok("白名单：尾部换行剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top\n") === true);
-  ok("白名单：零宽字符剥除后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top\u200b") === true);
-  ok("白名单：全角冒号规范化为 ASCII 后放行", httpLib.originAllowedValue("https：//www.lityzglimmer.top") === true);
-  ok("白名单：全角冒号端口规范化后放行", httpLib.originAllowedValue("https://www.lityzglimmer.top：443") === true);
-  ok("白名单：中文句号规范化后放行", httpLib.originAllowedValue("https://www.lityzglimmer。top") === true);
-  ok("白名单：协议头被剥乱仍按结尾放行", httpLib.originAllowedValue("https//www.lityzglimmer.top") === true);
-  ok("白名单：大小写混合放行", httpLib.originAllowedValue("HTTPS://WWW.LityzGlimmer.TOP") === true);
+  ok("白名单：尾部空格剥除后放行", httpLib.originAllowedValue("https://www.ltyzglimmer.top ") === true);
+  ok("白名单：首部空格剥除后放行", httpLib.originAllowedValue(" https://www.ltyzglimmer.top") === true);
+  ok("白名单：尾部换行剥除后放行", httpLib.originAllowedValue("https://www.ltyzglimmer.top\n") === true);
+  ok("白名单：零宽字符剥除后放行", httpLib.originAllowedValue("https://www.ltyzglimmer.top\u200b") === true);
+  ok("白名单：全角冒号规范化为 ASCII 后放行", httpLib.originAllowedValue("https：//www.ltyzglimmer.top") === true);
+  ok("白名单：全角冒号端口规范化后放行", httpLib.originAllowedValue("https://www.ltyzglimmer.top：443") === true);
+  ok("白名单：中文句号规范化后放行", httpLib.originAllowedValue("https://www.ltyzglimmer。top") === true);
+  ok("白名单：协议头被剥乱仍按结尾放行", httpLib.originAllowedValue("https//www.ltyzglimmer.top") === true);
+  ok("白名单：大小写混合放行", httpLib.originAllowedValue("HTTPS://WWW.LtyzGlimmer.TOP") === true);
   ok("白名单：全角标点的外部站照拦", httpLib.originAllowedValue("https：//evil。com") === false);
 
   /* v2.0.10：originSuspicious 拦截已临时下线（upload/register 取消调用），
@@ -652,8 +652,19 @@ async function testApi() {
   r = await callRaw(P, "POST",
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("http来源投稿") +
     "&author=" + encodeURIComponent("测试员"),
-    fakeJpeg(), { Origin: "http://www.lityzglimmer.top" });
-  ok("upload Origin: http://www.lityzglimmer.top → 放行入库", r.status === 200 && r.json.ok, "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+    fakeJpeg(), { Origin: "http://www.ltyzglimmer.top" });
+  ok("upload Origin: http://www.ltyzglimmer.top → 放行入库", r.status === 200 && r.json.ok, "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+  rl._buckets.clear();
+
+  /* v2.1.1 恢复来源检查（真凶=白名单错域名已修正）：外部 Origin 端到端 403，
+     拦截发生在限流/入库之前，不产生任何数据 */
+  rl._buckets.clear();
+  r = await callRaw(P, "POST",
+    "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("外部来源拦截") + "&author=" + encodeURIComponent("测试员"),
+    fakeJpeg(), { Origin: "https://evil.example.com" });
+  ok("恢复来源检查：外部 Origin 投稿 → 403", r.status === 403 && /来源不受支持/.test(r.json.error || ""), "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
+  r = await call(P, "POST", "/api/register", { name: "外部来源", contact: "x" }, { Origin: "https://evil.example.com" });
+  ok("恢复来源检查：外部 Origin 报名 → 403", r.status === 403, "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
   rl._buckets.clear();
 
   /* 频率限制：单 IP 10 分钟 15 次，第 16 次 429 */
@@ -693,7 +704,7 @@ async function testApi() {
   rl._buckets.clear();
   r = await callRaw(P, "POST",
     "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("通知炸了也入库"),
-    fakeJpeg(), { Origin: "https://www.lityzglimmer.top" });
+    fakeJpeg(), { Origin: "https://www.ltyzglimmer.top" });
   ok("通知服务挂掉时投稿照常成功", r.status === 200 && r.json.ok &&
     mock.state.photos.some(function (p) { return p.title === "通知炸了也入库"; }),
     "status=" + r.status + " " + JSON.stringify(r.json).slice(0, 120));
@@ -881,7 +892,7 @@ async function testApi() {
 
   /* ---------- 协议层 ---------- */
   r = await call(P, "OPTIONS", "/api/photos");
-  ok("OPTIONS 预检 → 204 + CORS 头", r.status === 204 && r.headers["access-control-allow-origin"] === "https://lityzglimmer.top");
+  ok("OPTIONS 预检 → 204 + CORS 头", r.status === 204 && r.headers["access-control-allow-origin"] === "https://ltyzglimmer.top");
 
   r = await call(P, "DELETE", "/api/photos");
   ok("photos 不允许 DELETE → 405", r.status === 405);

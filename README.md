@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://lityzglimmer.top">🌐 在线浏览网站</a>　·　<a href="https://lityzglimmer.top/gallery.html">📷 直接进入作品集</a>
+  <a href="https://ltyzglimmer.top">🌐 在线浏览网站</a>　·　<a href="https://ltyzglimmer.top/gallery.html">📷 直接进入作品集</a>
 </p>
 
 <p align="center">
@@ -81,6 +81,14 @@
 ## 更新记录
 
 > 版本号规则：小修小补递增末位（如 1.4.1、1.4.2）；重大更新会以更醒目的方式呈现。
+
+---
+
+### v2.1.1 · 2026-10-31 · 修正正式域名 + 恢复来源检查
+
+- **修复（重要）**｜全站 `canonical`、分享卡片（og）、`sitemap`、`robots.txt` 里的正式域名拼写有误（多写了一个字母），指向了一个不存在的地址——现已全部修正为 `https://ltyzglimmer.top`，搜索引擎接下来会按正确地址重新收录。
+- **修复**｜投稿/报名接口的**来源校验恢复上线**。此前（10 月 25 日）曾因「本地正常、线上被拦」而临时关闭，当时怀疑的原因（请求被插入不可见字符等）均不成立——真正的元凶正是上面那个域名拼写错误：校验白名单里写的是错误域名，真实访问来源永远对不上。域名修正后校验恢复，站外来源的跨站提交重新被 403 拦截。
+- 说明：同学们的正常访问与投稿不受任何影响；如遇到「来源不受支持」提示请联系社团干部。
 
 ---
 
@@ -232,7 +240,7 @@
 
 - **新增**｜社交分享预览：全部页面配置 Open Graph / Twitter Card 标签 + 1200×630 分享封面图（`assets/img/brand/og-cover.jpg`），把链接发到微信、QQ、抖音等平台时会显示标题、简介与封面卡片。
 - **新增**｜搜索引擎基础：新增 `robots.txt` 与 `sitemap.xml`，首页加入 `Organization` 结构化数据（JSON-LD）。
-- **修复**｜统一各页 `canonical` 与分享地址指向正式域名 `https://lityzglimmer.top`。
+- **修复**｜统一各页 `canonical` 与分享地址指向正式域名 `https://ltyzglimmer.top`。
 
 ### v1.4.2 · 2026-09-27
 

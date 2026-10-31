@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /_tools/
 
-Sitemap: https://lityzglimmer.top/sitemap.xml
+Sitemap: https://ltyzglimmer.top/sitemap.xml

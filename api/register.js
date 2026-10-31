@@ -23,12 +23,12 @@ module.exports = async function (req, res) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置数据库环境变量：" + miss.join(", ") });
     }
 
-    /* 防护一（v2.0.10 起临时下线）：跨站表单 POST 拦截。
-       与 upload 同步下线，原因与恢复方法见 api/upload.js 同位置注释——
-       本地放行、线上误拦，根因未明；限流/熔断/人工审核不受影响。 */
-    // if (http.originSuspicious(req)) {
-    //   return http.rejectOrigin(req, res);
-    // }
+    /* 防护一：跨站表单 POST 拦截（v2.1.1 恢复上线，与 upload 同步）。
+       v2.0.10 下线的真因是白名单域名拼写错误（lityzglimmer.top 未注册），
+       域名已修正并经注册局验证，检查恢复；详见 api/upload.js 同位置注释。 */
+    if (http.originSuspicious(req)) {
+      return http.rejectOrigin(req, res);
+    }
 
     /* 防护二：单 IP 频率限制（v2.0.12 起限流异步化，支持集中存储） */
     if (!(await rl.guard(req, "register", RL_MAX, RL_WINDOW))) {

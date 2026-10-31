@@ -48,7 +48,7 @@ function photoSubmitted(p) {
       p.shot_date ? "拍摄日期：" + p.shot_date : "",
       p.exif && p.exif.camera ? "机型：" + p.exif.camera : "",
       "",
-      "请到管理后台审核：https://lityzglimmer.top/admin.html"
+      "请到管理后台审核：https://ltyzglimmer.top/admin.html"
     ].filter(Boolean).join("\n");
     return notify("新投稿待审核 · " + (p.title || ""), lines);
   } catch (e) {
@@ -65,7 +65,7 @@ function signupSubmitted(s) {
       "联系方式：" + (s.contact || "—"),
       s.interest ? "兴趣方向：" + s.interest : "",
       "",
-      "请到管理后台查看：https://lityzglimmer.top/admin.html"
+      "请到管理后台查看：https://ltyzglimmer.top/admin.html"
     ].filter(Boolean).join("\n");
     return notify("新同学报名 · " + (s.name || ""), lines2);
   } catch (e) {

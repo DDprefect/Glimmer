@@ -11,7 +11,7 @@
    JPG 魔数、蜜罐和人工审核兜底，来源检查从来不是主防线。
    两次放宽的由来：v2.0.8 把「只认 https」放宽为「只拦明确外部来源」后，
    仍有用户（手机 5G 网络）被误拦——收到的 Origin 显示为正常的
-   https://www.lityzglimmer.top 却过不了正则。实际是网络侧代理/安全
+   https://www.ltyzglimmer.top 却过不了正则。实际是网络侧代理/安全
    软件往头部里插了不可见字符（空格、零宽字符等），肉眼看不出。
    因此匹配前先剥掉所有非可见 ASCII 字符，并按「主机名以本站域结尾」判定。 */
 function originAllowedValue(o) {
@@ -28,14 +28,14 @@ function originAllowedValue(o) {
   /* 提取主机名。顺序要紧：先剥端口（否则 "localhost:8848" 的 "localhost:"
      会被残缺协议正则当成 scheme 连主机名一起吃掉，只剩 "8848"），
      再剥协议头（标准 ://、冒号丢失的 //、单杠 :/ 三种形态都算），
-     最后才剥路径——反过来先剥路径会把 "https//www.lityzglimmer.top"
+     最后才剥路径——反过来先剥路径会把 "https//www.ltyzglimmer.top"
      整个切没。协议头被代理剥乱时主机名结尾依然是本站域，照样命中 */
   var host = o.replace(/:\d+(\/.*)?$/, "");
   host = host.replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
   host = host.replace(/^[a-z][a-z0-9+.-]*\/\//, "");
   host = host.replace(/^[a-z][a-z0-9+.-]*:\/*/, "");
   host = host.replace(/\/.*$/, "").replace(/\.+$/, "");
-  if (/(^|\.)lityzglimmer\.top$/.test(host)) return true;
+  if (/(^|\.)ltyzglimmer\.top$/.test(host)) return true;
   if (/(^|\.)vercel\.app$/.test(host)) return true;
   if (/(^|\.)localhost$/.test(host)) return true;
   if (host === "127.0.0.1") return true;
@@ -48,7 +48,7 @@ function originAllowedValue(o) {
 function allowOrigin(req) {
   var o = req.headers.origin || "";
   if (o && originAllowedValue(o)) return o;
-  return "https://lityzglimmer.top";
+  return "https://ltyzglimmer.top";
 }
 
 /* 部署版本诊断头：Vercel 为 Git 集成的部署自动注入 VERCEL_GIT_COMMIT_SHA，
@@ -169,11 +169,11 @@ function readRaw(req, limit) {
 /* 来源软检查：只拦「明摆着来自别的站」的浏览器 POST。
    注意：curl 等非浏览器客户端不带 Origin，拦不住也不打算拦——
    那类攻击靠限流 + 全局熔断 + 人工审核兜底（见 api/_lib/ratelimit.js）。
-   ⚠️ v2.0.10 起 upload/register 已临时**不再调用**本函数做拦截：
-   连续三次修复仍误拦真实用户（本地放行、线上 403，根因疑似 Vercel 部署与
-   本地行为不一致），而防护价值本就有限。函数与规则保留，恢复只需在
-   api/upload.js、api/register.js 取消注释。originAllowedValue 仍被
-   allowOrigin 使用（CORS 反射白名单，浏览器层真实有效，未动）。 */
+   历史：v2.0.10 起 upload/register 曾临时停用本检查——「本地放行、线上 403」
+   悬案的真因是白名单域名拼错（ltyzglimmer.top 从未注册，真实站点是
+   ltyzglimmer.top），v2.1.1 修正域名后检查恢复上线；当时怀疑的
+   「不可见字符注入」「部署不一致」均不成立。originAllowedValue 仍被
+   allowOrigin 使用（CORS 反射白名单，浏览器层真实有效）。 */
 function originSuspicious(req) {
   return !originAllowedValue(req.headers.origin);
 }

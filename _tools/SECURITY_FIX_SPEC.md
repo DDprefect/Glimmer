@@ -4,7 +4,7 @@
 
 > 本文档供实施 AI 直接照做。**范围：P0 / P1 / P2 全部整改。已明确排除 P3（低风险/卫生项：missingEnv 回显变量名、X-Glimmer-Rev 暴露 commit、蜜罐纯前端、后台无审计/2FA）。**
 > 严禁改动业务行为之外的东西；每项改动都要过既有测试（`_tools/api_test.js` 122 断言 / `_tools/page_test.js` 90 断言）并新增对应断言。
-> 当前线上：`https://lityzglimmer.top`，Vercel Serverless（`api/*.js` CommonJS 零依赖）+ 腾讯云 COS（广州，**公有读私有写**）+ Supabase Postgres。源码零密钥，密钥全在 Vercel 环境变量。
+> 当前线上：`https://ltyzglimmer.top`，Vercel Serverless（`api/*.js` CommonJS 零依赖）+ 腾讯云 COS（广州，**公有读私有写**）+ Supabase Postgres。源码零密钥，密钥全在 Vercel 环境变量。
 
 ---
 
@@ -297,7 +297,7 @@ async function allowCentral(key, max, windowMs) {
 ### 门控条件（全部满足才动）
 1. 用户用 `X-Glimmer-Rev` 响应头确认**全 Vercel 实例跑同一 commit** 持续 ≥ 24h（之前线上/本地不一致是误拦根因）。
 2. 这 24h 内无新发「来源不受支持」误报。
-3. 先在**预发/本地**用 `api_test.js` 的恢复用例跑绿（干净的 `https://www.lityzglimmer.top`、`https://lityzglimmer.top` 必须放行；外部 `https://evil.com` 必须 403）。
+3. 先在**预发/本地**用 `api_test.js` 的恢复用例跑绿（干净的 `https://www.ltyzglimmer.top`、`https://ltyzglimmer.top` 必须放行；外部 `https://evil.com` 必须 403）。
 
 ### 具体改动（门控通过后）
 - `api/upload.js` 第 ~62-64 行、取消注释：

@@ -18,11 +18,11 @@ var { JSDOM, VirtualConsole, requestInterceptor } = require("jsdom");
 
 var ROOT = path.join(__dirname, "..");
 
-/* 本地资源拦截器：页面跑在 https://lityzglimmer.top 源下（与生产一致，
+/* 本地资源拦截器：页面跑在 https://ltyzglimmer.top 源下（与生产一致，
    sessionStorage / isSecureContext 等行为才真实），脚本与样式映射到本地文件，
    其它外链（Google Fonts 等）返回空响应，不打网络。 */
 var localInterceptor = requestInterceptor(async function (request) {
-  var m = /^https:\/\/lityzglimmer\.top\/(.*)$/.exec(request.url);
+  var m = /^https:\/\/ltyzglimmer\.top\/(.*)$/.exec(request.url);
   if (!m) return new Response("", { status: 200, headers: { "Content-Type": "text/plain" } });
   var local = path.join(ROOT, decodeURIComponent(m[1])).replace(/\\/g, "/");
   var ext = path.extname(local).toLowerCase();
@@ -54,7 +54,7 @@ function loadPage(file, beforeParse) {
     console.log("    [jsdomError] " + (d && d.message ? d.message : d));
   });
   var dom = new JSDOM(html, {
-    url: "https://lityzglimmer.top/" + file + hash, // 与生产同源，存储/安全上下文行为真实
+    url: "https://ltyzglimmer.top/" + file + hash, // 与生产同源，存储/安全上下文行为真实
     runScripts: "dangerously",
     resources: { interceptors: [localInterceptor] },
     pretendToBeVisual: true,
@@ -554,7 +554,7 @@ async function testCommons() {
 
   copyBtn.dispatchEvent(new dom2.window.MouseEvent("click", { bubbles: true }));
   await new Promise(function (r) { setTimeout(r, 80); });
-  ok("复制的是单作品深链", /^https:\/\/lityzglimmer\.top\/gallery\.html#photo-\d+$/.test(copied), copied);
+  ok("复制的是单作品深链", /^https:\/\/ltyzglimmer\.top\/gallery\.html#photo-\d+$/.test(copied), copied);
   ok("复制后按钮给出反馈", /已复制/.test(copyBtn.textContent), copyBtn.textContent);
   dom2.window.close();
 

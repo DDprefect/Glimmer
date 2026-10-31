@@ -52,16 +52,16 @@ module.exports = async function (req, res) {
       return http.json(req, res, 500, { ok: false, error: "服务端未配置环境变量：" + miss.join(", ") });
     }
 
-    /* 防护一（v2.0.10 起临时下线）：跨站表单 POST 拦截。
-       下线原因：该检查连续三次修复仍误拦真实用户（本地代码放行、线上 403，
-       根因疑似 Vercel 部署与本地行为不一致，尚未定位），而它本就是「诚实局限」的
-       软检查——curl 等不带 Origin 的请求从来拦不住，真正防线是下面的限流、
-       全局熔断、JPG 魔数、蜜罐与人工先审后发。业务优先，先保投稿畅通。
-       恢复方法：取消下面两行注释即可（originAllowedValue 规则已按 v2.0.9 加固，
-       抗不可见字符/全角标点注入，恢复前建议先确认线上部署版本）。 */
-    // if (http.originSuspicious(req)) {
-    //   return http.rejectOrigin(req, res);
-    // }
+    /* 防护一：跨站表单 POST 拦截（v2.1.1 恢复上线）。
+       v2.0.8~v2.0.10 曾因「误拦真实用户」临时下线——真因现已查明：白名单里的
+       域名拼错了（lityzglimmer.top，一个从未注册的域名），线上真实来源
+       www.ltyzglimmer.top 根本不在名单里，与「不可见字符」「部署差异」均无关。
+       域名已经 .top 注册局 RDAP 验证并在 v2.1.1 全仓修正，检查随之恢复。
+       诚实局限不变：curl 等不带 Origin 的请求拦不住，真正防线是限流、
+       全局熔断、JPG 魔数、蜜罐与人工先审后发。 */
+    if (http.originSuspicious(req)) {
+      return http.rejectOrigin(req, res);
+    }
 
     /* 防护二：单 IP 频率限制（v2.0.12 起限流异步化，支持集中存储） */
     if (!(await rl.guard(req, "upload", RL_MAX, RL_WINDOW))) {
