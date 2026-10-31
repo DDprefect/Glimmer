@@ -2627,3 +2627,16 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   cursor: pointer; -webkit-appearance: none; appearance: none;
 }
 .admin-item__ops .admin-cat:disabled { opacity: .5; }
+
+/* ===== v2.2.3：后台卡片响应式修复 =====
+   v2.2.0 起操作按钮增多，.admin-item__ops 是不可收缩的 flex 块：
+   窄屏下整块按钮叠到缩略图/信息区上——放大点不到、信息被遮。
+   让卡片允许换行：宽屏保持单行（按钮右对齐），窄屏按钮独立成行。 */
+.admin-item { flex-wrap: wrap; row-gap: 12px; }
+.admin-item__ops { flex: 1 1 auto; min-width: 0; justify-content: flex-end; }
+@media (max-width: 860px) {
+  .admin-item__ops { flex: 1 1 100%; justify-content: flex-start; }
+  .admin-item__img { width: 108px; height: 76px; }
+}
+/* 灯箱底部两颗按钮在窄屏换行时留出呼吸 */
+.lb__cap { row-gap: 10px; }
