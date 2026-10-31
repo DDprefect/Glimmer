@@ -453,6 +453,15 @@ async function testAdmin() {
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点精选 → 请求 featured 动作（v2.2.0）", callLog.some(function (b) { return b && b.action === "featured" && b.featured === true; }), JSON.stringify(callLog));
 
+  /* 分类快切（v2.2.2）：选择即保存 */
+  ok("操作栏含分类快切下拉框（v2.2.2）", !!d.querySelector('#pane-approved select.admin-cat') && d.querySelectorAll('#pane-approved select.admin-cat option').length === 4);
+  callLog.length = 0;
+  var catSel = d.querySelector('#pane-approved select.admin-cat');
+  catSel.value = "城市与远方";
+  catSel.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("快捷改分类 → 请求 update 且带新分类（v2.2.2）", callLog.some(function (b) { return b && b.action === "update" && b.category === "城市与远方" && String(b.id) === "8"; }), JSON.stringify(callLog));
+
   /* 审核通过 */
   var approveBtn = d.querySelector('#pane-pending button[data-act="approve"]');
   callLog.length = 0;

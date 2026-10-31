@@ -118,24 +118,36 @@
     "</form>";
   }
 
+  /* v2.2.2：分类快切下拉框——改类别最高频，不该进编辑模式绕三步 */
+  function catQuickSel(p) {
+    return '<select class="admin-cat" data-id="' + p.id + '" title="快速修改分类，选择后立即保存">' +
+      CATEGORIES.map(function (c) {
+        return '<option value="' + c + '"' + (c === p.category ? " selected" : "") + ">" + c + "</option>";
+      }).join("") +
+      "</select>";
+  }
+
   function photoCard(p, mode) {
     var ops = "";
     var sel = "";
     if (mode === "pending") {
       sel = '<label class="check admin-item__sel" title="选中批量处理"><input type="checkbox" class="batch-cb" data-id="' + p.id + '"></label>';
-      ops = '<button class="admin-op admin-op--ok" type="button" data-act="approve" data-id="' + p.id + '">通过</button>' +
+      ops = catQuickSel(p) +
+            '<button class="admin-op admin-op--ok" type="button" data-act="approve" data-id="' + p.id + '">通过</button>' +
             '<button class="admin-op" type="button" data-act="reject" data-id="' + p.id + '">拒绝</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else if (mode === "approved") {
-      ops = '<button class="admin-op" type="button" data-act="edit" data-id="' + p.id + '">编辑</button>' +
+      ops = catQuickSel(p) +
+            '<button class="admin-op" type="button" data-act="edit" data-id="' + p.id + '">编辑</button>' +
             '<button class="admin-op" type="button" data-act="watermark" data-id="' + p.id + '" title="重打水印：公开图覆盖为带水印版，原图留在私有目录">打水印</button>' +
             '<button class="admin-op" type="button" data-act="featured" data-id="' + p.id + '" data-feat="' + (p.featured ? "1" : "0") + '">' + (p.featured ? "取消精选" : "精选") + '</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op" type="button" data-act="unpublish" data-id="' + p.id + '">下架</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     } else {
-      ops = '<button class="admin-op admin-op--ok" type="button" data-act="restore" data-id="' + p.id + '">恢复上架</button>' +
+      ops = catQuickSel(p) +
+            '<button class="admin-op admin-op--ok" type="button" data-act="restore" data-id="' + p.id + '">恢复上架</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
     }
@@ -484,6 +496,19 @@
         showMsg(panelMsg, "已保存修改。", "is-ok");
         return load();
       }).catch(errHandler);
+    });
+
+    /* v2.2.2：分类快切——选了立即保存，不用进编辑模式 */
+    pane.addEventListener("change", function (e) {
+      var t = e.target;
+      if (!t || !t.classList || !t.classList.contains("admin-cat")) return;
+      var cat = t.value;
+      if (!cat) return;
+      t.disabled = true;
+      api("update", { id: t.getAttribute("data-id"), category: cat }).then(function () {
+        showMsg(panelMsg, "分类已改为「" + cat + "」。", "is-ok");
+        return load();
+      }).catch(errHandler).then(function () { t.disabled = false; });
     });
   });
 

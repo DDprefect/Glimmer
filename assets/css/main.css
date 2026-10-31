@@ -2618,3 +2618,12 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .admin-month { margin: -4px 0 18px; font-size: .85rem; opacity: .72; }
 .admin-item__feat { color: var(--gold); font-weight: 600; }
 .lb__cap .lb__dl { margin-left: 10px; }
+
+/* v2.2.2：分类快切下拉框（对齐 admin-op 按钮观感） */
+.admin-item__ops .admin-cat {
+  font: inherit; font-size: .82rem; padding: 6px 10px;
+  background: var(--card, #FFFDF8); color: var(--ink, #1A1613);
+  border: 1px solid rgba(26,22,19,.18); border-radius: 999px;
+  cursor: pointer; -webkit-appearance: none; appearance: none;
+}
+.admin-item__ops .admin-cat:disabled { opacity: .5; }
