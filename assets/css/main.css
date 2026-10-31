@@ -2645,3 +2645,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
    max-height:100% 失去参照，竖图直接溢出视口盖住信息行。改为强制拉伸舞台、
    裁掉溢出，图片在舞台内完整可见。 */
 .lb__stage { align-self: stretch; overflow: hidden; }
+
+/* v2.2.8：灯箱切换加载态——大图未就绪时半透明，避免「只换名字不换图」观感 */
+.lb__img { transition: opacity .3s var(--ease); }
+.lb__img.is-loading { opacity: .3; }

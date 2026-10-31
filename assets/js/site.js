@@ -441,7 +441,14 @@
     function render() {
       var it = list[idx];
       if (!it) return;
+      /* v2.2.8：大图加载状态——切换时 src 换成未下载的全尺寸图，浏览器会一直
+         显示上一张已加载的图直到新图解码完成，看起来就像「只换名字不换图」。
+         现在未就绪时半透明提示 + 就绪后恢复，同时预加载相邻两张让切换即时。 */
+      imgEl.onload = function () { imgEl.classList.remove("is-loading"); };
+      imgEl.onerror = imgEl.onload;
+      if (!imgEl.complete) imgEl.classList.add("is-loading");
       imgEl.src = it.src;
+      if (imgEl.complete) imgEl.classList.remove("is-loading");
       imgEl.alt = it.title || "";
       capEl.textContent = it.title || "";
       $(".lb__cap p", el).textContent = it.sub || it.group || "";
@@ -449,6 +456,18 @@
       if (exifEl) exifEl.innerHTML = exifLine(it.shot);
       if (copyEl) copyEl.hidden = !workLink(it);
       if (dlEl) dlEl.hidden = !it.src;
+      preloadAround();
+    }
+
+    /* 预加载相邻两张：左右切换时大图已在缓存里，基本即时显示 */
+    function preloadAround() {
+      [-1, 1].forEach(function (d) {
+        var n = list[(idx + d + list.length) % list.length];
+        if (n && n.src) {
+          var im = new Image();
+          im.src = n.src;
+        }
+      });
     }
 
     /* 拍摄信息行：机型 · 镜头 · 光圈 快门 ISO 焦段
