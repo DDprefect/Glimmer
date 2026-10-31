@@ -53,15 +53,18 @@
 <section class="section" id="panel" hidden style="padding-top:clamp(28px,4vw,48px)">
   <div class="wrap-n">
     <div class="admin-bar">
-      <div class="admin-stats">
-        <span class="admin-stat"><b id="st-pending">0</b>待审核</span>
-        <span class="admin-stat"><b id="st-approved">0</b>已发布</span>
-        <span class="admin-stat"><b id="st-offline">0</b>已下架</span>
-        <span class="admin-stat"><b id="st-subs">0</b>条报名</span>
-      </div>
+      <div class="admin-bar__t">后台面板</div>
       <button class="btn btn--ghost btn--sm" type="button" id="admin-logout">退出登录</button>
     </div>
-    <p class="admin-month" id="admin-month" hidden></p>
+
+    <!-- v2.5.0：核心数字做成 KPI 卡——学生干部一眼看清今天要处理什么 -->
+    <div class="admin-kpi" id="admin-kpi">
+      <div class="kpi kpi--warn"><span class="kpi__k">待审核</span><b id="st-pending">0</b></div>
+      <div class="kpi"><span class="kpi__k">已发布</span><b id="st-approved">0</b></div>
+      <div class="kpi"><span class="kpi__k">已下架</span><b id="st-offline">0</b></div>
+      <div class="kpi"><span class="kpi__k">本月投稿</span><b id="st-mphotos">0</b></div>
+      <div class="kpi"><span class="kpi__k">本月报名</span><b id="st-msubs">0</b></div>
+    </div>
 
     <div class="admin-tabs" role="tablist">
       <button class="admin-tab is-on" type="button" data-tab="pending" role="tab">待审核 <b id="tab-pending">0</b></button>
@@ -117,6 +120,7 @@
 <div data-foot></div>
 
 <input type="file" id="replace-file" accept="image/*" hidden aria-hidden="true">
+<div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
 
 <script src="assets/js/site.js"></script>
 <script src="assets/js/admin.js"></script>

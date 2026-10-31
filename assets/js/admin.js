@@ -26,8 +26,28 @@
   var data = { pending: [], approved: [], offline: [], submissions: [] };
   var subsFilter = "all";
 
+  /* v2.5.0：后台操作反馈改成右下角浮动 toast——成功绿色、失败红色，
+     比原来顶上那一行小字醒目得多；3.5 秒后自动淡出。 */
+  function toast(text, kind) {
+    var host = document.getElementById("toast-wrap");
+    if (!host) return;
+    var t = document.createElement("div");
+    t.className = "toast" + (kind ? " " + kind : "");
+    t.textContent = text;
+    host.appendChild(t);
+    setTimeout(function () {
+      t.classList.add("is-out");
+      setTimeout(function () { t.remove(); }, 320);
+    }, 3500);
+  }
+
   function showMsg(el, text, kind) {
     if (!el) return;
+    /* 面板类反馈统一走 toast；登录框仍用内联提示（在表单里更自然） */
+    if (el === panelMsg) {
+      if (text) toast(text, kind);
+      return;
+    }
     el.hidden = !text;
     el.textContent = text || "";
     el.classList.remove("is-err", "is-ok");
@@ -170,22 +190,19 @@
     $("#st-pending").textContent = d.pending.length;
     $("#st-approved").textContent = d.approved.length;
     $("#st-offline").textContent = d.offline.length;
-    $("#st-subs").textContent = d.submissions.length;
     $("#tab-pending").textContent = d.pending.length;
     $("#tab-approved").textContent = d.approved.length;
     $("#tab-offline").textContent = d.offline.length;
     $("#tab-subs").textContent = d.submissions.length;
 
-    /* 本月概览（v2.2.0）：按北京月份统计，与备份记账口径一致 */
-    var monthEl = $("#admin-month");
-    if (monthEl) {
-      var month = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 7);
-      var mPhotos = d.approved.concat(d.pending, d.offline).filter(function (p) { return (p.created_at || "").indexOf(month) === 0; }).length;
-      var mSubs = d.submissions.filter(function (s) { return (s.created_at || "").indexOf(month) === 0; }).length;
-      var mFeat = d.approved.filter(function (p) { return p.featured; }).length;
-      monthEl.textContent = "本月投稿 " + mPhotos + " 件 · 本月报名 " + mSubs + " 人 · 精选作品 " + mFeat + " 件";
-      monthEl.hidden = false;
-    }
+    /* v2.5.0：本月数据进 KPI 卡（北京月份，与备份记账口径一致） */
+    var month = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 7);
+    var mPhotos = d.approved.concat(d.pending, d.offline).filter(function (p) { return (p.created_at || "").indexOf(month) === 0; }).length;
+    var mSubs = d.submissions.filter(function (s) { return (s.created_at || "").indexOf(month) === 0; }).length;
+    var elMP = $("#st-mphotos");
+    if (elMP) elMP.textContent = mPhotos;
+    var elMS = $("#st-msubs");
+    if (elMS) elMS.textContent = mSubs;
 
     /* 待审核 */
     var bar = $("#batch-bar");

@@ -2660,3 +2660,21 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .lb__img { max-height: calc(100vh - 190px); }
 .lb__img.is-loading { opacity: 1; }
 .lb__loading { font-family: var(--mono); font-size: .72rem; letter-spacing: .1em; color: rgba(255,255,255,.55); align-self: center; }
+
+/* ===== v2.5.0：后台仪表化（KPI 卡 + 浮动 toast） =====
+   设计原则取自 2026 主流后台（Stripe/Vercel/Supabase）：克制配色、
+   数字优先、反馈就地浮现，不引入新依赖。 */
+.admin-bar__t { font-family: var(--serif); font-size: 1.02rem; letter-spacing: .04em; }
+.admin-kpi { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0 0 20px; }
+.kpi { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.kpi__k { font-size: .72rem; letter-spacing: .14em; color: var(--ink-3); }
+.kpi b { font-family: var(--serif); font-size: clamp(1.45rem, 2.3vw, 1.85rem); line-height: 1; color: var(--ink); }
+.kpi--warn { border-color: rgba(176, 58, 34, .32); background: rgba(176, 58, 34, .04); }
+.kpi--warn b { color: var(--red); }
+@media (max-width: 860px) { .admin-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.toast-wrap { position: fixed; right: 18px; bottom: 18px; z-index: 9800; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.toast { background: #2B2622; color: #fff; font-size: .86rem; line-height: 1.6; padding: 11px 16px; border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .28); max-width: min(78vw, 460px); animation: toastIn .24s var(--ease); }
+.toast.is-ok { background: #2F5D3A; }
+.toast.is-err { background: #8E2F1C; }
+.toast.is-out { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

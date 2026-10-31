@@ -407,7 +407,7 @@ async function testAdmin() {
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("登录后面板显示", !d.getElementById("panel").hidden);
   ok("密码存入了 sessionStorage", dom.window.sessionStorage.getItem("glimmer_admin_pw") === "glimmer2026");
-  ok("统计数字渲染（1/1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-offline").textContent === "1" && d.getElementById("st-subs").textContent === "1");
+  ok("统计数字渲染（1/1/1/1）", d.getElementById("st-pending").textContent === "1" && d.getElementById("st-approved").textContent === "1" && d.getElementById("st-offline").textContent === "1" && d.getElementById("tab-subs").textContent === "1");
   ok("待审核卡片渲染", /待审作品/.test(d.getElementById("pane-pending").textContent));
 
   /* 缩略图点击放大（宽版浮层，加载原图） */
@@ -423,7 +423,7 @@ async function testAdmin() {
   ok("已发布卡片含打水印重试钮（v2.1.0）", !!d.querySelector('#pane-approved button[data-act="watermark"]'));
   ok("已发布卡片含精选与换图钮（v2.2.0）", !!d.querySelector('#pane-approved button[data-act="featured"]') && !!d.querySelector('#pane-approved button[data-act="replace"]'));
   ok("待审核卡片含拒绝与换图钮（v2.2.0）", !!d.querySelector('#pane-pending button[data-act="reject"]') && !!d.querySelector('#pane-pending button[data-act="replace"]'));
-  ok("本月概览已渲染（v2.2.0）", /本月投稿 \d+ 件/.test((d.getElementById("admin-month") || {}).textContent || ""), (d.getElementById("admin-month") || {}).textContent);
+  ok("后台 KPI 卡渲染（v2.5.0）", d.querySelectorAll("#admin-kpi .kpi").length === 5 && /\d/.test(d.getElementById("st-mphotos").textContent) && /\d/.test(d.getElementById("st-msubs").textContent), d.getElementById("st-mphotos").textContent + "/" + d.getElementById("st-msubs").textContent);
   ok("已下架卡片含恢复钮", !!d.querySelector('#pane-offline button[data-act="restore"]'));
 
   /* 批量通过 */
@@ -532,7 +532,8 @@ async function testAdmin() {
   d.getElementById("backup-now").click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("立即备份 → 请求 backup 动作", callLog.some(function (b) { return b && b.action === "backup"; }), JSON.stringify(callLog));
-  ok("备份结果提示（stamp/条数）", /备份完成（2026-10）/.test(d.getElementById("panel-msg").textContent) && /作品 3 条/.test(d.getElementById("panel-msg").textContent), d.getElementById("panel-msg").textContent);
+  var toastText = Array.prototype.map.call(d.querySelectorAll("#toast-wrap .toast"), function (t) { return t.textContent; }).join(" | ");
+  ok("备份结果以 toast 提示（v2.5.0）", /备份完成（2026-10）/.test(toastText) && /作品 3 条/.test(toastText), toastText);
 
   ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
   dom.window.close();
