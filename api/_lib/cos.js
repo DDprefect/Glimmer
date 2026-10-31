@@ -164,7 +164,10 @@ function errorFromRes(res) {
 /* 对象是否存在（签名 HEAD）。桶策略只拒匿名，不影响服务端自访 */
 function objectExists(key) {
   var s = sign("head", key, 600);
-  return fetch(s.url, { method: "HEAD" }).then(function (res) {
+  return fetch(s.url, { method: "HEAD" }).catch(function (e) {
+    var code = e && e.cause && (e.cause.code || e.cause.message);
+    throw new Error("存储对象查询失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
+  }).then(function (res) {
     if (res.ok) return true;
     if (res.status === 404) return false;
     return errorFromRes(res).then(function () { return false; });
@@ -176,7 +179,10 @@ function copyObject(fromKey, toKey) {
   var c = cfg();
   var source = camSafeUrlEncode(c.Bucket + ".cos." + c.Region + ".myqcloud.com/" + fromKey);
   var s = sign("put", toKey, 600, { "x-cos-copy-source": source });
-  return fetch(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }).then(function (res) {
+  return fetch(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }).catch(function (e) {
+    var code = e && e.cause && (e.cause.code || e.cause.message);
+    throw new Error("存储复制失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
+  }).then(function (res) {
     if (!res.ok) return errorFromRes(res);
     return true;
   });
@@ -186,7 +192,10 @@ function copyObject(fromKey, toKey) {
 function putBuffer(key, buf, contentType) {
   var headers = contentType ? { "Content-Type": contentType } : null;
   var s = sign("put", key, 600, headers);
-  return fetch(s.url, { method: "PUT", body: buf, headers: headers || undefined }).then(function (res) {
+  return fetch(s.url, { method: "PUT", body: buf, headers: headers || undefined }).catch(function (e) {
+    var code = e && e.cause && (e.cause.code || e.cause.message);
+    throw new Error("存储写入失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
+  }).then(function (res) {
     if (!res.ok) return errorFromRes(res);
     return true;
   });
@@ -208,6 +217,9 @@ function imageProcess(srcKey, destKey, rule) {
   return fetch(s.url + "&image_process", {
     method: "POST",
     headers: { "Pic-Operations": pic }
+  }).catch(function (e) {
+    var code = e && e.cause && (e.cause.code || e.cause.message);
+    throw new Error("水印处理请求失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
   }).then(function (res) {
     if (!res.ok) return errorFromRes(res);
     return res.json().catch(function () { return {}; });
