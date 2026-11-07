@@ -60,16 +60,21 @@ function deployRev() {
   return sha ? sha.slice(0, 7) : "local";
 }
 
-/* 安全响应头（v2.0.12）。CSP 先以 Report-Only 上线观察，确认无违规后再切强制
-   （把 Report-Only 后缀去掉即可，vercel.json 里静态资源同款同步改）。
+/* 安全响应头（v2.0.12 以 Report-Only 上线观察，v2.5.1 起转为强制执行）。
    script-src 收紧到 'self' 的前提已具备：join 页内联脚本已抽到外部文件、
-   字体链接的 onload 翻改由 site.js 统一接管（v2.0.12 清理）。 */
+   字体链接的 onload 翻改由 site.js 统一接管（v2.0.12 清理）。
+   转强制前逐项核对过全站资源：无内联脚本 / 无 on* 事件；Google Fonts
+   域名在 style-src、font-src 内；COS 图片域名在 img-src 内；Vercel
+   访问统计脚本与上报端点均同源（/_vercel/insights/*），'self' 可覆盖。
+   ⚠️ img-src 必须放行 blob: ——投稿页与后台换图在不支持 createImageBitmap
+   的浏览器上走 img.src = URL.createObjectURL(file) 的解码降级路径，
+   漏掉会让这些设备的选图预览直接失效。 */
 var CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
   "font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com",
-  "img-src 'self' https://*.myqcloud.com data:",
+  "img-src 'self' https://*.myqcloud.com data: blob:",
   "connect-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -78,7 +83,7 @@ var CSP = [
 ].join("; ");
 
 function securityHeaders(res) {
-  res.setHeader("Content-Security-Policy-Report-Only", CSP);
+  res.setHeader("Content-Security-Policy", CSP);
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");

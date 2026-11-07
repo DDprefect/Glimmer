@@ -414,16 +414,20 @@ async function testApi() {
   ok("GET 只返回 approved", r.json.photos.length === 2 && r.json.photos.every(function (p) { return p.status === "approved"; }));
   ok("GET 按 created_at 倒序", r.json.photos[0].id === 1 && r.json.photos[1].id === 3);
 
-  /* ---------- v2.0.12 F3：安全响应头 ---------- */
+  /* ---------- v2.0.12 F3 / v2.5.1：安全响应头（CSP 已转强制） ---------- */
   ok("API 响应带 nosniff", r.headers["x-content-type-options"] === "nosniff", JSON.stringify(r.headers));
   ok("API 响应带 X-Frame-Options: DENY", r.headers["x-frame-options"] === "DENY", r.headers["x-frame-options"]);
   ok("API 响应带 Referrer-Policy", r.headers["referrer-policy"] === "strict-origin-when-cross-origin", r.headers["referrer-policy"]);
-  ok("API 响应带 CSP（Report-Only 起步）", (r.headers["content-security-policy-report-only"] || "").indexOf("script-src 'self'") !== -1, r.headers["content-security-policy-report-only"]);
+  var liveCsp = r.headers["content-security-policy"] || "";
+  ok("CSP 已转强制（不再是 Report-Only）", liveCsp.indexOf("script-src 'self'") !== -1 && !r.headers["content-security-policy-report-only"], liveCsp);
+  ok("CSP img-src 放行 blob:（选图解码降级路径）", /img-src[^;]*blob:/.test(liveCsp), liveCsp);
   var vjson = JSON.parse(fs.readFileSync(path.join(ROOT, "vercel.json"), "utf8"));
   var vkeys = ((vjson.headers || [])[0] || { headers: [] }).headers.map(function (h) { return h.key; });
+  var vcsp = (((vjson.headers || [])[0] || { headers: [] }).headers.filter(function (h) { return h.key === "Content-Security-Policy"; })[0] || {}).value || "";
   ok("vercel.json 配了四项安全头（静态资源同款）",
-    ["Content-Security-Policy-Report-Only", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"]
+    ["Content-Security-Policy", "X-Content-Type-Options", "X-Frame-Options", "Referrer-Policy"]
       .every(function (k) { return vkeys.indexOf(k) !== -1; }), vkeys.join(","));
+  ok("vercel.json 的 CSP 与 API 完全一致（含 blob:）", vcsp === liveCsp, "static=" + vcsp.slice(0, 80) + " | api=" + liveCsp.slice(0, 80));
 
   /* ---------- photos 已收敛为只读（投稿只走 /api/upload） ---------- */
   r = await call(P, "POST", "/api/photos", { category: "校园纪实", title: "x", file_url: COS_BASE + "校园纪实/9.jpg" });
