@@ -189,6 +189,17 @@ async function testGallery() {
   domCat.window.document.querySelector('.filter[data-cat="city"]').click();
   await new Promise(function (r) { setTimeout(r, 60); });
   ok("切换分类写回地址栏（v2.4.0）", /[?&]cat=city/.test(domCat.window.location.search), domCat.window.location.search);
+
+  /* v2.6.0：后台把静态老作品移入回收站后，清单到达 → 作品集重渲染并剔除 */
+  var countEl = d.querySelector("[data-count-works]");
+  var countBefore = Number(countEl ? countEl.getAttribute("data-count") : 0);
+  ok("排除清单接口已被请求", calls.indexOf("api/static-works") !== -1, JSON.stringify(calls));
+  dom.window.Glimmer.setStaticExcluded(["hanlou-01"]);
+  await new Promise(function (r) { setTimeout(r, 60); });
+  var countAfter = Number(countEl ? countEl.getAttribute("data-count") : 0);
+  ok("排除清单到达 → 展出计数减 1", countAfter === countBefore - 1, countBefore + " → " + countAfter);
+  ok("被移除的静态作品不再出现在网格", !d.querySelector('#works-grid .work[data-id="hanlou-01"]'), d.querySelectorAll("#works-grid .work").length + " 张");
+  domCat.window.close();
   dom.window.close(); dom2.window.close(); dom3.window.close();
 }
 
@@ -213,6 +224,11 @@ async function testIndex() {
   ok("最新收录渲染 2 张卡", d.querySelectorAll("#latest-strip .latest-card").length === 2);
   ok("最新收录加载缩图（640px）", /imageMogr2\/thumbnail\/640x/.test(d.querySelector("#latest-strip img").getAttribute("src")), d.querySelector("#latest-strip img").getAttribute("src"));
   ok("卡片链到作品深链", d.querySelector("#latest-strip .latest-card").getAttribute("href") === "gallery.html#photo-101");
+
+  /* v2.6.0：静态老作品被移入回收站后，首页精选区同步剔除 */
+  dom.window.Glimmer.setStaticExcluded(["hanlou-06"]);
+  await new Promise(function (r) { setTimeout(r, 40); });
+  ok("首页精选区不再包含被移除的老作品", !d.querySelector('#pick-campus .work[data-id="hanlou-06"]'), d.querySelectorAll("#pick-campus .work").length + " 张");
 
   /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
   var fontLink = d.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]');
@@ -360,6 +376,12 @@ async function testAdmin() {
       var b = opts && opts.body ? JSON.parse(opts.body) : null;
       lastBody = b;
       callLog.push(b);
+      /* v2.6.0：后台加载静态老作品清单（公开只读接口） */
+      if (String(url).indexOf("api/static-works") !== -1) {
+        return Promise.resolve({ ok: true, status: 200, json: function () {
+          return Promise.resolve({ ok: true, hidden: ["hanlou-01"], purged: ["sports-01"], excluded: ["hanlou-01", "sports-01"] });
+        } });
+      }
       if (mode === "401") {
         return Promise.resolve({ ok: false, status: 401, json: function () { return Promise.resolve({ ok: false, error: "密码不正确" }); } });
       }
@@ -385,6 +407,7 @@ async function testAdmin() {
             pending: [{ id: 7, category: "校园纪实", title: "待审作品", author: "同学甲", shot_date: "2026-02-01", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/7.jpg", status: "pending", created_at: "2026-02-02T00:00:00Z" }],
             approved: [{ id: 8, category: "城市与远方", title: "已发作品", author: "同学乙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/城市与远方/8.jpg", status: "approved", created_at: "2026-02-01T00:00:00Z" }],
             offline: [{ id: 9, category: "人像与视觉", title: "下架作品", author: "同学丙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/人像与视觉/9.jpg", status: "offline", created_at: "2026-01-31T00:00:00Z" }],
+            trash: [{ id: 10, category: "校园纪实", title: "回收站作品", author: "同学丁", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/10.jpg", status: "trash", created_at: "2026-01-30T00:00:00Z" }],
             submissions: [{ id: 1, name: "报名人", class: "高一1班", contact: "QQ 1", interest: "人像", intro: "嗨", handled: false, created_at: "2026-02-01T00:00:00Z" }]
           });
         }
@@ -489,15 +512,51 @@ async function testAdmin() {
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点击通过 → 请求 approve 动作", callLog.some(function (b) { return b && b.action === "approve" && String(b.id) === "7"; }), JSON.stringify(callLog));
 
-  /* 删除（confirm 打桩） */
+  /* 删除（v2.6.0：软删除进回收站；confirm 打桩） */
   dom.window.confirm = function () { return true; };
-  var delBtn = d.querySelector('#pane-pending button[data-act="remove"]');
+  var delBtn = d.querySelector('#pane-pending button[data-act="trash"]');
   callLog.length = 0;
   delBtn.click();
   await new Promise(function (r) { setTimeout(r, 80); });
-  ok("点击删除 → 请求 delete 动作", callLog.some(function (b) { return b && b.action === "delete" && String(b.id) === "7"; }), JSON.stringify(callLog));
+  ok("点「移入回收站」→ 请求 trash 动作", callLog.some(function (b) { return b && b.action === "trash" && String(b.id) === "7"; }), JSON.stringify(callLog));
 
-  /* 选项卡切换 */
+  /* v2.6.0：缩略图 × 角标 + 放大浮层里的删除按钮 */
+  ok("缩略图带 × 快捷删除角标", !!d.querySelector('#pane-pending .admin-item__x[data-act="trash"]'));
+  var thumb2 = d.querySelector("#pane-pending .admin-item__img");
+  thumb2.click();
+  var zoomAct = d.querySelector(".zoom__act");
+  ok("放大浮层带删除按钮且可见", !!zoomAct && !zoomAct.hidden && /移入回收站/.test(zoomAct.textContent), zoomAct ? zoomAct.textContent + " hidden=" + zoomAct.hidden : "no button");
+  callLog.length = 0;
+  zoomAct.click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("浮层删除按钮 → 请求 trash 且浮层关闭", callLog.some(function (b) { return b && b.action === "trash"; }) && !d.querySelector(".zoom").classList.contains("is-open"), JSON.stringify(callLog));
+
+  /* v2.6.0：回收站标签页——可恢复 / 可永久删除 */
+  var trashTab = d.querySelector('.admin-tab[data-tab="trash"]');
+  trashTab.click();
+  ok("回收站标签可打开且列出投稿作品", d.getElementById("pane-trash").classList.contains("is-on") && /回收站作品/.test(d.getElementById("trash-list").textContent));
+  ok("回收站卡片含恢复到已下架与永久删除", !!d.querySelector('#trash-list button[data-act="restore_trash"]') && !!d.querySelector('#trash-list button[data-act="remove"]'));
+  callLog.length = 0;
+  d.querySelector('#trash-list button[data-act="restore_trash"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点恢复 → 请求 restore_trash", callLog.some(function (b) { return b && b.action === "restore_trash" && String(b.id) === "10"; }), JSON.stringify(callLog));
+
+  /* v2.6.0：老作品标签页——清单状态、筛选、移入回收站 */
+  var staticTab = d.querySelector('.admin-tab[data-tab="static"]');
+  staticTab.click();
+  var statGrid = d.getElementById("static-list");
+  ok("老作品面板列出 works.js 的静态作品", d.getElementById("pane-static").classList.contains("is-on") && statGrid.querySelectorAll(".admin-static").length > 50, statGrid.querySelectorAll(".admin-static").length + " 张");
+  ok("清单里的作品标注为回收站/已永久移除", !!statGrid.querySelector('.admin-static[data-id="hanlou-01"][data-state="hidden"]') && !!statGrid.querySelector('.admin-static[data-id="sports-01"][data-state="purged"]'));
+  ok("回收站里也列出被隐藏的老作品", /hanlou-01|微光|寒楼/.test(d.getElementById("trash-static-list").textContent) || d.querySelectorAll("#trash-static-list .admin-static").length === 2, d.querySelectorAll("#trash-static-list .admin-static").length + " 张");
+  d.querySelector('#static-filter .admin-filter[data-sf="hidden"]').click();
+  ok("老作品筛选「回收站」只显示被移除的", statGrid.querySelectorAll(".admin-static").length === 2, statGrid.querySelectorAll(".admin-static").length + " 张");
+  callLog.length = 0;
+  var sbtn = statGrid.querySelector('button[data-sact="visible"]');
+  sbtn.click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点恢复展示 → 请求 static_set(visible)", callLog.some(function (b) { return b && b.action === "static_set" && b.state === "visible"; }), JSON.stringify(callLog));
+
+  /* 选项卡切换（回到报名，验证筛选选择器未串台） */
   var subsTab = d.querySelector('.admin-tab[data-tab="subs"]');
   subsTab.click();
   ok("报名选项卡可见且含导出按钮", d.getElementById("pane-subs").classList.contains("is-on") && !!d.getElementById("export-csv"));

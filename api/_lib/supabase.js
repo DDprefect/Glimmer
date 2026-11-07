@@ -77,6 +77,11 @@ var photos = {
   offline: function () {
     return rest("GET", "photos?select=*&status=eq.offline&order=created_at.desc");
   },
+  /* 回收站（v2.6.0）：从任一状态移入，数据与图片都保留，可恢复或永久删除。
+     status 列是纯 text 无 check 约束，新增取值不需要跑 SQL。 */
+  trash: function () {
+    return rest("GET", "photos?select=*&status=eq.trash&order=created_at.desc");
+  },
   byId: function (id) {
     return rest("GET", "photos?select=id,file_url&id=eq." + encodeURIComponent(id));
   },

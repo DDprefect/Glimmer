@@ -77,6 +77,7 @@ grant all on public.photos, public.submissions to service_role;
 ## 6. 演练清单（每学期一次，约 10 分钟）
 
 - [ ] 后台点「立即备份」，确认返回当月 CSV 且签名链接可下载；
+- [ ] 确认 `_backup/<月>/` 下除两张 CSV 外还有 `static-works-<月>.json`（v2.6.0 起新增：静态老作品删除清单也进备份；丢了会让已删老图复活）；
 - [ ] 打开 `_backup/` 下的 CSV，确认条数与后台显示一致；
 - [ ] 匿名访问 `https://ltyzglimmer-photos-1495891073.cos.ap-guangzhou.myqcloud.com/_backup/任意文件名.csv` → 应为 **AccessDenied**（防止备份被公开下载）；
 - [x] 确认 COS 版本控制状态（2026-11-01 已开启，文件列表「显示历史版本」可见）；

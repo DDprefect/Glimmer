@@ -167,6 +167,8 @@
     initHero();
     renderSections();
     renderLatest();
+    /* v2.6.0：静态老作品被移入回收站后，清单异步到达时重渲染首页精选区 */
+    document.addEventListener("glimmer:static-excluded", renderSections);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

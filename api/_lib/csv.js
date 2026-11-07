@@ -30,7 +30,7 @@ var PHOTO_COLS = [
   ["file_url", "图片地址"]
 ];
 
-var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架" };
+var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架", trash: "回收站" };
 
 /* rows：数据行；cols：[[字段, 中文表头]]；map：可选的值映射（如状态中文化） */
 function toCsv(rows, cols, map) {

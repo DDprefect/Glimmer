@@ -16,15 +16,17 @@
   try { password = sessionStorage.getItem(PW_KEY) || ""; } catch (e) {}
 
   var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
-  var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架" };
+  var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架", trash: "回收站" };
 
   var loginSec = $("#login");
   var panelSec = $("#panel");
   var loginMsg = $("#login-msg");
   var panelMsg = $("#panel-msg");
 
-  var data = { pending: [], approved: [], offline: [], submissions: [] };
+  var data = { pending: [], approved: [], offline: [], trash: [], submissions: [] };
+  var staticWorks = { hidden: [], purged: [], excluded: [] };
   var subsFilter = "all";
+  var staticFilter = "all";
 
   /* v2.5.0：后台操作反馈改成右下角浮动 toast——成功绿色、失败红色，
      比原来顶上那一行小字醒目得多；3.5 秒后自动淡出。 */
@@ -150,13 +152,15 @@
   function photoCard(p, mode) {
     var ops = "";
     var sel = "";
+    var delAct = "trash";       /* 默认软删除：移入回收站 */
+    var delText = "移入回收站";
     if (mode === "pending") {
       sel = '<label class="check admin-item__sel" title="选中批量处理"><input type="checkbox" class="batch-cb" data-id="' + p.id + '"></label>';
       ops = catQuickSel(p) +
             '<button class="admin-op admin-op--ok" type="button" data-act="approve" data-id="' + p.id + '">通过</button>' +
             '<button class="admin-op" type="button" data-act="reject" data-id="' + p.id + '">拒绝</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
-            '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
+            '<button class="admin-op admin-op--del" type="button" data-act="trash" data-id="' + p.id + '">移入回收站</button>';
     } else if (mode === "approved") {
       ops = catQuickSel(p) +
             '<button class="admin-op" type="button" data-act="edit" data-id="' + p.id + '">编辑</button>' +
@@ -164,24 +168,93 @@
             '<button class="admin-op" type="button" data-act="featured" data-id="' + p.id + '" data-feat="' + (p.featured ? "1" : "0") + '">' + (p.featured ? "取消精选" : "精选") + '</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
             '<button class="admin-op" type="button" data-act="unpublish" data-id="' + p.id + '">下架</button>' +
-            '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
+            '<button class="admin-op admin-op--del" type="button" data-act="trash" data-id="' + p.id + '">移入回收站</button>';
+    } else if (mode === "trash") {
+      /* v2.6.0：回收站——恢复到「已下架」（需再手动上架，防误发布）或永久删除 */
+      delAct = "remove";
+      delText = "永久删除";
+      ops = '<button class="admin-op admin-op--ok" type="button" data-act="restore_trash" data-id="' + p.id + '">恢复到已下架</button>' +
+            '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">永久删除</button>';
     } else {
       ops = catQuickSel(p) +
             '<button class="admin-op admin-op--ok" type="button" data-act="restore" data-id="' + p.id + '">恢复上架</button>' +
             '<button class="admin-op" type="button" data-act="replace" data-id="' + p.id + '">换图</button>' +
-            '<button class="admin-op admin-op--del" type="button" data-act="remove" data-id="' + p.id + '">删除</button>';
+            '<button class="admin-op admin-op--del" type="button" data-act="trash" data-id="' + p.id + '">移入回收站</button>';
     }
     return '<article class="admin-item" data-id="' + p.id + '">' +
       sel +
-      /* 列表加载缩图（数据万象），data-full 存原图供点击放大 */
-      '<img class="admin-item__img" src="' + esc(G.thumbUrl ? G.thumbUrl(p.file_url, 400) : p.file_url) + '" data-full="' + esc(p.file_url) + '" alt="' + esc(p.title) + '" loading="lazy" decoding="async">' +
+      /* 缩略图右上角常驻一个 ×：待审核时看到不好的片子可以直接删，
+         不必在按钮堆里找；title 说明是可恢复的软删除。 */
+      '<div class="admin-item__ph">' +
+        '<img class="admin-item__img" src="' + esc(G.thumbUrl ? G.thumbUrl(p.file_url, 400) : p.file_url) + '" data-full="' + esc(p.file_url) + '" alt="' + esc(p.title) + '" loading="lazy" decoding="async">' +
+        '<button class="admin-item__x" type="button" data-act="' + delAct + '" data-id="' + p.id + '" title="' + delText + '" aria-label="' + delText + '">×</button>' +
+      "</div>" +
       '<div class="admin-item__meta">' +
         "<h3>" + esc(p.title) + "</h3>" +
         "<p>" + metaLine(p) + "</p>" +
       "</div>" +
-      editForm(p) +
+      (mode === "trash" ? "" : editForm(p)) +
       '<div class="admin-item__ops">' + ops + "</div>" +
     "</article>";
+  }
+
+  /* ---------------- 静态老作品卡片（v2.6.0） ----------------
+     数据源是 works.js（后台页已引入），状态来自 COS 私有清单。
+     ⚠️ 静态图片是仓库文件，运行时删不掉，所谓「永久移除」是从展示
+     清单里永久剔除；因此仍保留「撤销」入口，误操作有后悔药。 */
+  function staticState(w) {
+    if (staticWorks.purged.indexOf(w.id) !== -1) return "purged";
+    if (staticWorks.hidden.indexOf(w.id) !== -1) return "hidden";
+    return w.hidden ? "legacy" : "shown";
+  }
+
+  function staticCard(w) {
+    var state = staticState(w);
+    var label = { purged: "已永久移除", hidden: "回收站", legacy: "原本未展出", shown: "展示中" }[state];
+    var ops = "";
+    if (state === "shown" || state === "legacy") {
+      ops = '<button class="admin-op admin-op--del" type="button" data-sact="hidden" data-id="' + esc(w.id) + '">移入回收站</button>' +
+            '<button class="admin-op" type="button" data-sact="purged" data-id="' + esc(w.id) + '">永久移除</button>';
+    } else {
+      ops = '<button class="admin-op admin-op--ok" type="button" data-sact="visible" data-id="' + esc(w.id) + '">撤销，恢复展示</button>' +
+            (state === "hidden"
+              ? '<button class="admin-op admin-op--del" type="button" data-sact="purged" data-id="' + esc(w.id) + '">永久移除</button>'
+              : "");
+    }
+    var src = G.safeUrl ? G.safeUrl(w.thumb || w.src) : (w.thumb || w.src);
+    return '<article class="admin-static" data-id="' + esc(w.id) + '" data-state="' + state + '">' +
+      '<div class="admin-static__ph">' +
+        '<img src="' + esc(src) + '" alt="' + esc(w.title || w.id) + '" loading="lazy" decoding="async">' +
+        '<span class="admin-static__st is-' + state + '">' + label + "</span>" +
+      "</div>" +
+      '<div class="admin-static__meta"><b>' + esc(w.title || w.id) + "</b><i>" + esc(w.group || w.cat || "") + "</i></div>" +
+      '<div class="admin-static__ops">' + ops + "</div>" +
+    "</article>";
+  }
+
+  function renderStatic() {
+    var all = window.WORKS || [];
+    var list = all.filter(function (w) {
+      var s = staticState(w);
+      if (staticFilter === "shown") return s === "shown" || s === "legacy";
+      if (staticFilter === "hidden") return s === "hidden" || s === "purged";
+      return true;
+    });
+    var host = $("#static-list");
+    if (host) {
+      host.innerHTML = list.length ? list.map(staticCard).join("") : '<p class="admin-empty">这里暂时没有作品。</p>';
+    }
+    var trashHost = $("#trash-static-list");
+    if (trashHost) {
+      var removed = all.filter(function (w) { var s = staticState(w); return s === "hidden" || s === "purged"; });
+      trashHost.innerHTML = removed.length
+        ? removed.map(staticCard).join("")
+        : '<p class="admin-empty">回收站里没有老作品。</p>';
+    }
+    var tab = $("#tab-static");
+    if (tab) tab.textContent = all.length;
+    var t2 = $("#tab-trash");
+    if (t2) t2.textContent = data.trash.length + staticWorks.hidden.length + staticWorks.purged.length;
   }
 
   /* ---------------- 渲染 ---------------- */
@@ -195,9 +268,12 @@
     $("#tab-offline").textContent = d.offline.length;
     $("#tab-subs").textContent = d.submissions.length;
 
+    var tTrash = $("#tab-trash");
+    if (tTrash) tTrash.textContent = d.trash.length + staticWorks.hidden.length + staticWorks.purged.length;
+
     /* v2.5.0：本月数据进 KPI 卡（北京月份，与备份记账口径一致） */
     var month = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 7);
-    var mPhotos = d.approved.concat(d.pending, d.offline).filter(function (p) { return (p.created_at || "").indexOf(month) === 0; }).length;
+    var mPhotos = d.approved.concat(d.pending, d.offline, d.trash).filter(function (p) { return (p.created_at || "").indexOf(month) === 0; }).length;
     var mSubs = d.submissions.filter(function (s) { return (s.created_at || "").indexOf(month) === 0; }).length;
     var elMP = $("#st-mphotos");
     if (elMP) elMP.textContent = mPhotos;
@@ -221,6 +297,15 @@
       ? d.offline.map(function (p) { return photoCard(p, "offline"); }).join("")
       : '<p class="admin-empty">没有已下架的作品。</p>';
 
+    /* 回收站（v2.6.0）：投稿作品可恢复或永久删除 */
+    var trashList = $("#trash-list");
+    if (trashList) {
+      trashList.innerHTML = d.trash.length
+        ? d.trash.map(function (p) { return photoCard(p, "trash"); }).join("")
+        : '<p class="admin-empty">回收站里没有投稿作品。</p>';
+    }
+
+    renderStatic();
     renderSubs();
     updateBatchCount();
   }
@@ -262,11 +347,23 @@
 
   function load() {
     showMsg(panelMsg, "");
-    return api("list").then(function (j) {
+    return Promise.all([
+      api("list"),
+      /* 静态老作品清单走公开只读接口；失败不阻塞后台其它功能 */
+      fetch("api/static-works").then(function (r) { return r.json(); }).catch(function () { return null; })
+    ]).then(function (rs) {
+      var j = rs[0];
+      var sw = rs[1];
       data.pending = j.pending || [];
       data.approved = j.approved || [];
       data.offline = j.offline || [];
+      data.trash = j.trash || [];
       data.submissions = j.submissions || [];
+      if (sw && sw.ok) {
+        staticWorks.hidden = sw.hidden || [];
+        staticWorks.purged = sw.purged || [];
+        staticWorks.excluded = sw.excluded || staticWorks.hidden.concat(staticWorks.purged);
+      }
       render();
     }).catch(function (e) {
       if (e.unauthorized) {
@@ -320,9 +417,9 @@
   $("#batch-del").addEventListener("click", function () {
     var ids = checkedIds();
     if (!ids.length) return;
-    if (!window.confirm("将删除选中的 " + ids.length + " 件作品（数据库记录与 COS 图片一并清掉），确定？")) return;
+    if (!window.confirm("将选中的 " + ids.length + " 件作品移入回收站（图片会保留，可在回收站恢复），确定？")) return;
     this.disabled = true;
-    api("batch", { ids: ids, op: "delete" }).then(load).catch(errHandler).then(reenable(this));
+    api("batch", { ids: ids, op: "trash" }).then(load).catch(errHandler).then(reenable(this));
   });
 
   function checkedIds() {
@@ -371,10 +468,12 @@
     });
   });
 
-  /* ---------------- 事件：报名筛选 ---------------- */
-  $$(".admin-filter").forEach(function (b) {
+  /* ---------------- 事件：报名筛选 ----------------
+     v2.6.0：限定在 #pane-subs 内，避免把「老作品」面板同款 class 的
+     筛选按钮一起绑上（否则点静态筛选会连带改报名筛选状态）。 */
+  $$("#pane-subs .admin-filter").forEach(function (b) {
     b.addEventListener("click", function () {
-      $$(".admin-filter").forEach(function (x) { x.classList.remove("is-on"); });
+      $$("#pane-subs .admin-filter").forEach(function (x) { x.classList.remove("is-on"); });
       b.classList.add("is-on");
       subsFilter = b.getAttribute("data-f");
       renderSubs();
@@ -416,14 +515,43 @@
       .then(function () { btn.disabled = false; });
   });
 
+  /* ---------------- 删除动作统一入口（v2.6.0） ----------------
+     trash = 移入回收站（软删，图片全保留）；remove = 永久删除（连带 COS）。
+     卡片按钮、缩略图 × 角标、放大浮层里的按钮都走这里，确认文案一致。 */
+  function doDelete(id, act) {
+    if (act === "remove") {
+      if (!window.confirm("永久删除后，数据库记录与 COS 里的图片都会被清掉（COS 版本控制仍可能找回，但操作麻烦），确定？")) return;
+    } else if (!window.confirm("把这件作品移入回收站？官网立刻不再展示，图片与记录都保留，随时可恢复。")) {
+      return;
+    }
+    return api(act === "remove" ? "delete" : "trash", { id: id })
+      .then(function () {
+        showMsg(panelMsg, act === "remove" ? "已永久删除。" : "已移入回收站，可在「回收站」标签恢复。", "is-ok");
+        return load();
+      })
+      .catch(errHandler);
+  }
+
   /* ---------------- 事件：作品卡片操作（事件委托） ---------------- */
-  ["#pane-pending", "#pane-approved", "#pane-offline"].forEach(function (sel) {
+  ["#pane-pending", "#pane-approved", "#pane-offline", "#pane-trash"].forEach(function (sel) {
     var pane = $(sel);
     if (!pane) return;
     pane.addEventListener("click", function (e) {
-      /* 点缩略图 → 宽版放大（审核看片用，加载原图而非缩图） */
+      /* 点缩略图 → 宽版放大（审核看片用，加载原图而非缩图）。
+         v2.6.0：浮层里直接挂一个删除按钮——看到不好的片子不用退出再找按钮。 */
       if (e.target.classList && e.target.classList.contains("admin-item__img")) {
-        if (G.ZOOM) G.ZOOM.open(e.target.getAttribute("data-full") || e.target.getAttribute("src"), true);
+        var phCard = e.target.closest ? e.target.closest(".admin-item") : null;
+        var phId = phCard ? phCard.getAttribute("data-id") : null;
+        var inTrash = !!(e.target.closest && e.target.closest("#pane-trash"));
+        if (G.ZOOM) {
+          G.ZOOM.open(e.target.getAttribute("data-full") || e.target.getAttribute("src"), true, phId ? {
+            label: inTrash ? "永久删除这张" : "移入回收站",
+            onAct: function () {
+              if (G.ZOOM) G.ZOOM.close();
+              doDelete(phId, inTrash ? "remove" : "trash");
+            }
+          } : null);
+        }
         return;
       }
       var btn = e.target.closest ? e.target.closest("button[data-act]") : null;
@@ -480,10 +608,17 @@
         }).catch(errHandler).then(function () { btn.disabled = false; });
         return;
       }
-      if (act === "remove") {
-        if (!window.confirm("删除后，数据库记录与 COS 里的图片都会被清掉，确定删除这件作品？")) return;
+      if (act === "restore_trash") {
         btn.disabled = true;
-        api("delete", { id: id }).then(load).catch(errHandler);
+        api("restore_trash", { id: id }).then(function () {
+          showMsg(panelMsg, "已恢复到「已下架」，需要发布请到该标签点「恢复上架」。", "is-ok");
+          return load();
+        }).catch(errHandler);
+        return;
+      }
+      if (act === "trash" || act === "remove") {
+        btn.disabled = true;
+        doDelete(id, act).then(function () { btn.disabled = false; });
         return;
       }
       if (act === "edit") {
@@ -612,6 +747,34 @@
       });
     });
   }
+
+  /* ---------------- 事件：静态老作品（v2.6.0） ---------------- */
+  $$("#static-filter .admin-filter").forEach(function (b) {
+    b.addEventListener("click", function () {
+      $$("#static-filter .admin-filter").forEach(function (x) { x.classList.remove("is-on"); });
+      b.classList.add("is-on");
+      staticFilter = b.getAttribute("data-sf") || "all";
+      renderStatic();
+    });
+  });
+
+  ["#static-list", "#trash-static-list"].forEach(function (sel) {
+    var host = $(sel);
+    if (!host) return;
+    host.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest("button[data-sact]") : null;
+      if (!btn) return;
+      var sid = btn.getAttribute("data-id");
+      var state = btn.getAttribute("data-sact");
+      if (!sid) return;
+      if (state === "purged" && !window.confirm("永久移除后，这张老作品不会再出现在官网与后台列表（图片文件仍在仓库，可撤销）。确定？")) return;
+      btn.disabled = true;
+      api("static_set", { id: sid, state: state }).then(function () {
+        showMsg(panelMsg, state === "visible" ? "已恢复展示。" : state === "purged" ? "已永久移除。" : "已移入回收站。", "is-ok");
+        return load();
+      }).catch(errHandler).then(function () { btn.disabled = false; });
+    });
+  });
 
   /* ---------------- 事件：报名已联系切换 ---------------- */
   $("#subs-table").addEventListener("click", function (e) {

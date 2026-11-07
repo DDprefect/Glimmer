@@ -9,7 +9,7 @@
 var http = require("./_lib/http");
 var db = require("./_lib/supabase");
 
-var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架" };
+var STATUS_TEXT = { pending: "待审核", approved: "已发布", offline: "已下架", trash: "未通过" };
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);

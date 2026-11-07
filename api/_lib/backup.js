@@ -13,6 +13,7 @@
 var db = require("./supabase");
 var cos = require("./cos");
 var csvLib = require("./csv");
+var staticworks = require("./staticworks");
 
 /* 北京时间（UTC+8）的 YYYY-MM：社里按北京时间记账，不用 UTC 月份 */
 function stampCN() {
@@ -54,7 +55,29 @@ async function runBackup() {
   var photosUrl = await putText("_backup/" + stamp + "/photos-" + stamp + ".csv", photosCsv);
   var subsUrl = await putText("_backup/" + stamp + "/submissions-" + stamp + ".csv", subsCsv);
 
-  return { stamp: stamp, photos: photos.length, subs: subs.length, photosUrl: photosUrl, subsUrl: subsUrl };
+  /* v2.6.0：静态老作品的删除清单也进备份。它存在 _config/ 而非数据库，
+     不备份的话清单丢失会让「已删除」的老作品重新出现在官网。
+     读失败不阻塞 CSV 备份（降级为空清单并标记）。 */
+  var staticOk = true;
+  var swList;
+  try {
+    swList = await staticworks.read();
+  } catch (e) {
+    staticOk = false;
+    swList = staticworks.emptyList();
+  }
+  try {
+    await putText("_backup/" + stamp + "/static-works-" + stamp + ".json",
+      JSON.stringify({ stamp: stamp, ok: staticOk, hidden: swList.hidden, purged: swList.purged }, null, 2));
+  } catch (e) {
+    staticOk = false; /* 清单备份失败不影响两张主表已完成的备份 */
+  }
+
+  return {
+    stamp: stamp, photos: photos.length, subs: subs.length,
+    photosUrl: photosUrl, subsUrl: subsUrl,
+    staticHidden: swList.hidden.length, staticPurged: swList.purged.length, staticOk: staticOk
+  };
 }
 
 module.exports = { runBackup: runBackup, stampCN: stampCN };

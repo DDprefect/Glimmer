@@ -564,6 +564,7 @@
         '<div class="zoom__inner">' +
           '<img alt="二维码大图">' +
           '<p class="zoom__hint">点击空白处关闭 · 长按可保存</p>' +
+          '<button class="zoom__act" type="button" hidden></button>' +
         "</div>";
       document.body.appendChild(el);
       imgEl = el.querySelector("img");
@@ -572,9 +573,22 @@
         if (e.key === "Escape" && el.classList.contains("is-open")) close();
       });
     }
-  function open(src, wide) {
+  /* v2.6.0：open 第三个参数可选——后台看大图时挂一个操作按钮
+     （如「移入回收站」）。旧调用 open(src) / open(src, true) 行为不变。
+     按钮阻止冒泡，避免点它时把浮层一起关掉。 */
+  function open(src, wide, opts) {
     ensure();
     imgEl.src = src;
+    var actBtn = el.querySelector(".zoom__act");
+    if (actBtn) {
+      var usable = opts && opts.label && typeof opts.onAct === "function";
+      actBtn.hidden = !usable;
+      actBtn.textContent = usable ? opts.label : "";
+      actBtn.onclick = usable ? function (e) {
+        e.stopPropagation();
+        opts.onAct();
+      } : null;
+    }
     el.classList.add("is-open");
     /* wide：照片查看用宽版浮层（二维码用默认窄版） */
     el.classList.toggle("zoom--wide", !!wide);
@@ -680,11 +694,33 @@
      条目数据里带 hidden:true 的表示「已下架但保留数据」——
      图片与条目都还在，只是不再出现在任何列表 / 灯箱 / 分类计数里。
      加图、撤图都只改 works.js，不用碰各处渲染逻辑。 */
-  function visibleWorks() {
-    return (window.WORKS || []).filter(function (w) { return !w.hidden; });
+  /* v2.6.0：静态老作品排除清单。works.js 在 Vercel 运行时只读，后台把
+     「移入回收站 / 永久移除」的 id 写进 COS 私有清单，公开接口
+     /api/static-works 返回；这里读取后 visibleWorks() 直接过滤，
+     首页与作品集监听到 glimmer:static-excluded 事件会重渲染。 */
+  var staticExcluded = {};
+  function setStaticExcluded(ids) {
+    staticExcluded = {};
+    (ids || []).forEach(function (id) { if (id) staticExcluded[String(id)] = 1; });
+    try {
+      document.dispatchEvent(new CustomEvent("glimmer:static-excluded"));
+    } catch (e) { /* 老浏览器无 CustomEvent 构造：跳过事件，本页已有的过滤仍生效 */ }
+  }
+  function loadStaticExcluded() {
+    if (SHOT || location.protocol === "file:" || typeof fetch !== "function") return;
+    fetch("api/static-works")
+      .then(function (r) { return r.json(); })
+      .then(function (j) { if (j && j.ok) setStaticExcluded(j.excluded); })
+      .catch(function () { /* 接口不可用：不排除任何作品，静默降级 */ });
   }
 
-  window.Glimmer = { $: $, $$: $$, esc: esc, safeUrl: safeUrl, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, SHOT: SHOT, ZOOM: ZOOM, thumbUrl: thumbUrl };
+  function visibleWorks() {
+    return (window.WORKS || []).filter(function (w) {
+      return !w.hidden && !staticExcluded[w.id];
+    });
+  }
+
+  window.Glimmer = { $: $, $$: $$, esc: esc, safeUrl: safeUrl, workCard: workCard, bindCards: bindCards, visibleWorks: visibleWorks, setStaticExcluded: setStaticExcluded, SHOT: SHOT, ZOOM: ZOOM, thumbUrl: thumbUrl };
 
   /* 动态渲染出来的图片：调试/截图模式下立即加载，避免懒加载留白 */
   function eagerAll(root) {
@@ -748,6 +784,7 @@
   function boot() {
     flipFonts();
     analytics();
+    loadStaticExcluded();
     curtain();
     renderNav();
     renderRecruit();

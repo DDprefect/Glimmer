@@ -2678,3 +2678,40 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .toast.is-err { background: #8E2F1C; }
 .toast.is-out { opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ===== v2.6.0：回收站 / 静态老作品管理 / 缩略图快捷删除 ===== */
+.admin-item__ph { position: relative; flex: none; line-height: 0; }
+.admin-item__x {
+  position: absolute; top: -6px; right: -6px; width: 26px; height: 26px;
+  border: 0; border-radius: 50%; cursor: pointer; line-height: 1;
+  font-size: 17px; color: #fff; background: var(--red, #B03A22);
+  box-shadow: 0 2px 8px rgba(0,0,0,.28); z-index: 2;
+  display: grid; place-items: center; padding: 0;
+}
+.admin-item__x:hover { background: #8E2F1C; }
+.zoom__act {
+  margin-top: 14px; font: inherit; font-size: .86rem; padding: 9px 18px;
+  color: #fff; background: var(--red, #B03A22); border: 0;
+  border-radius: 999px; cursor: pointer;
+}
+.zoom__act[hidden] { display: none; }
+.admin-subhead { font-family: var(--serif); font-size: 1rem; margin: 22px 0 12px; }
+.admin-static-filter { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+.admin-static-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px;
+}
+.admin-static { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); overflow: hidden; }
+.admin-static__ph { position: relative; aspect-ratio: 4 / 3; background: #eee; }
+.admin-static__ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.admin-static__st {
+  position: absolute; left: 8px; top: 8px; font-size: .7rem;
+  padding: 3px 9px; border-radius: 999px; background: rgba(26,22,19,.78); color: #fff;
+}
+.admin-static__st.is-hidden { background: rgba(176,58,34,.9); }
+.admin-static__st.is-purged { background: rgba(95,94,90,.92); }
+.admin-static__meta { padding: 10px 12px 4px; display: grid; gap: 3px; }
+.admin-static__meta b { font-size: .88rem; font-weight: 600; }
+.admin-static__meta i { font-size: .74rem; font-style: normal; opacity: .6; }
+.admin-static__ops { padding: 4px 12px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 560px) { .admin-static-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }

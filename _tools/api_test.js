@@ -266,7 +266,8 @@ function startApiServer() {
     "/api/keepalive": require(path.join(ROOT, "api/keepalive.js")),
     "/api/upload": require(path.join(ROOT, "api/upload.js")),
     "/api/backup": require(path.join(ROOT, "api/backup.js")),
-    "/api/replace": require(path.join(ROOT, "api/replace.js"))
+    "/api/replace": require(path.join(ROOT, "api/replace.js")),
+    "/api/static-works": require(path.join(ROOT, "api/static-works.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -374,19 +375,32 @@ async function testApi() {
   var notifyCalls = [];
   var cosCalls = [];
   var cosObjects = new Set();
+  var cosBodies = new Map(); /* v2.6.0：静态作品清单要能「写进再读回」 */
   globalThis.fetch = function (url, opts) {
     var u = String(url);
     var method = ((opts && opts.method) || "GET").toUpperCase();
     if (u.indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
     if (u.indexOf("myqcloud.com") !== -1) {
-      cosCalls.push({ url: u, method: method, headers: (opts && opts.headers) || {} });
+      cosCalls.push({ url: u, method: method, headers: (opts && opts.headers) || {}, body: opts && opts.body });
       var path = u.split("?")[0];
       if (method === "HEAD") {
         var hit = cosObjects.has(path);
         return Promise.resolve({ ok: hit, status: hit ? 200 : 404, text: function () { return Promise.resolve(""); }, json: function () { return Promise.resolve({}); } });
       }
-      if (method === "PUT") cosObjects.add(path);
-      if (method === "DELETE") cosObjects.delete(path);
+      if (method === "PUT") {
+        cosObjects.add(path);
+        if (opts && opts.body) cosBodies.set(path, Buffer.from(opts.body).toString("utf8"));
+      }
+      if (method === "DELETE") { cosObjects.delete(path); cosBodies.delete(path); }
+      /* GET：清单读回；未写过则返回 404，驱动空清单降级 */
+      if (method === "GET" && path.indexOf("_config/hidden-works.json") !== -1) {
+        var txt = cosBodies.get(path);
+        return Promise.resolve({
+          ok: !!txt, status: txt ? 200 : 404,
+          text: function () { return Promise.resolve(txt || ""); },
+          json: function () { return Promise.resolve(txt ? JSON.parse(txt) : {}); }
+        });
+      }
     }
     if (notifyBroken && u.indexOf("sctapi.ftqq.com") === 0) {
       return Promise.reject(new Error("simulated ECONNREFUSED"));
@@ -763,6 +777,11 @@ async function testApi() {
   ok("备份 CSV 已写 COS _backup/（PUT 签名请求在案）", notifyCalls.some(function (u) {
     return u.indexOf("https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/_backup/") === 0 && u.indexOf("|PUT") !== -1;
   }), notifyCalls.join(" ; ").slice(0, 240));
+  /* v2.6.0：静态作品清单也随月度备份落盘，避免清单丢失让已删除老图复活 */
+  ok("备份含静态老作品清单 JSON（v2.6.0）", notifyCalls.some(function (u) {
+    return u.indexOf("/_backup/") !== -1 && u.indexOf("static-works-") !== -1 && u.indexOf("|PUT") !== -1;
+  }), notifyCalls.filter(function (u) { return u.indexOf("static-works") !== -1; }).join(" ; ").slice(0, 200));
+  ok("备份返回静态清单计数与状态", r.json.backup && typeof r.json.backup.staticHidden === "number" && typeof r.json.backup.staticPurged === "number" && typeof r.json.backup.staticOk === "boolean", JSON.stringify(r.json.backup).slice(0, 200));
   ok("备份完成推送通知", notifyCalls.some(function (u) {
     return u.indexOf("sctapi.ftqq.com/TESTSENDKEY.send?title=") !== -1 && u.indexOf("|GET") !== -1;
   }), notifyCalls.join(" ; ").slice(0, 240));
@@ -1008,6 +1027,54 @@ async function testApi() {
   ok("photos 不允许 DELETE → 405", r.status === 405);
 
   ok("服务端确实带了 service key 访问 Supabase", mock.state.sawServiceKey === true);
+
+  /* ---------- v2.6.0：静态老作品清单 + 回收站 ---------- */
+  mock.state.photos.push(
+    { id: 9001, category: "校园纪实", title: "回收站测试A", author: "测试", file_url: COS_BASE + "校园纪实/9001.jpg", status: "approved", created_at: "2026-01-03T00:00:00Z" },
+    { id: 9002, category: "校园纪实", title: "回收站测试B", author: "测试", file_url: COS_BASE + "校园纪实/9002.jpg", status: "pending", created_at: "2026-01-04T00:00:00Z" }
+  );
+  r = await call(P, "GET", "/api/static-works");
+  ok("静态清单初次读取 → 空清单（404 降级）", r.status === 200 && r.json.ok === true && r.json.excluded.length === 0, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/static-works", {});
+  ok("静态清单只接受 GET → 405", r.status === 405);
+  ok("静态清单接口带强制 CSP 头", (r.headers["content-security-policy"] || "").indexOf("script-src 'self'") !== -1);
+
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "hidden" });
+  ok("static_set(hidden) → 200", r.status === 200 && r.json.ok === true, JSON.stringify(r.json));
+  r = await call(P, "GET", "/api/static-works");
+  ok("清单读回 hidden 且 excluded 包含它", r.json.hidden.indexOf("hanlou-01") !== -1 && r.json.excluded.indexOf("hanlou-01") !== -1, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "purged" });
+  ok("static_set(purged) → 从 hidden 迁到 purged（互斥）", r.status === 200);
+  r = await call(P, "GET", "/api/static-works");
+  ok("清单 hidden 已清空、purged 生效", r.json.hidden.indexOf("hanlou-01") === -1 && r.json.purged.indexOf("hanlou-01") !== -1, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "visible" });
+  ok("static_set(visible) → 恢复展示", r.status === 200);
+  r = await call(P, "GET", "/api/static-works");
+  ok("恢复后清单为空", r.json.excluded.length === 0, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "bogus" });
+  ok("static_set 非法状态 → 400", r.status === 400);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", state: "hidden" });
+  ok("static_set 缺 id → 400", r.status === 400);
+  r = await call(P, "POST", "/api/admin", { password: "wrong", action: "static_set", id: "x", state: "hidden" });
+  ok("静态清单写入需管理密码 → 401", r.status === 401);
+
+  /* 软删除：数据库行与 COS 图片都必须保留 */
+  var beforeCos = cosCalls.filter(function (c) { return c.method === "DELETE"; }).length;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "trash", id: "9001" });
+  ok("trash → 200 且状态变 trash", r.status === 200 && mock.state.photos.some(function (p) { return p.id === 9001 && p.status === "trash"; }));
+  ok("trash 不删 COS 文件（软删除）", cosCalls.filter(function (c) { return c.method === "DELETE"; }).length === beforeCos);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
+  ok("list 返回 trash 分组", Array.isArray(r.json.trash) && r.json.trash.some(function (p) { return p.id === 9001; }));
+  r = await call(P, "GET", "/api/photos");
+  ok("回收站作品不出现在公开作品列表", !(r.json.photos || []).some(function (p) { return p.id === 9001; }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "restore_trash", id: "9001" });
+  ok("restore_trash → 回到 offline（不直接发布）", r.status === 200 && mock.state.photos.some(function (p) { return p.id === 9001 && p.status === "offline"; }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "trash", id: "9999" });
+  ok("trash 不存在 id → 404", r.status === 404);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "delete", id: "9001" });
+  ok("delete 仍是永久删除（行消失）", r.status === 200 && !mock.state.photos.some(function (p) { return p.id === 9001; }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: ["9002"], op: "trash" });
+  ok("批量 trash → 软删除不删行", r.status === 200 && r.json.done === 1 && mock.state.photos.some(function (p) { return p.id === 9002 && p.status === "trash"; }));
 
   globalThis.fetch = realFetch;
   api.server.close();

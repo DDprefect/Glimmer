@@ -70,6 +70,24 @@
     var dbItems = [];
     var all = dbItems.concat(staticAll); // 初始仅静态，接口回来后合并
 
+    /* v2.6.0：静态老作品被干部移入回收站 / 永久移除后，site.js 会派发
+       glimmer:static-excluded；这里重算静态来源、刷新筛选计数并重渲染。 */
+    function syncStatic() {
+      if (!grid) return;
+      staticAll = G.visibleWorks ? G.visibleWorks() : (window.WORKS || []);
+      all = dbItems.concat(staticAll);
+      if (filterHost) {
+        $$(".filter", filterHost).forEach(function (b) {
+          var n = b.getAttribute("data-cat");
+          var count = n === "all" ? all.length : all.filter(function (w) { return w.cat === n; }).length;
+          var badge = b.querySelector("b");
+          if (badge) badge.textContent = count;
+        });
+      }
+      render(true);
+    }
+    document.addEventListener("glimmer:static-excluded", syncStatic);
+
     var grid = $("#works-grid");
     var filterHost = $("#works-filters");
     var moreHost = $("#works-more");

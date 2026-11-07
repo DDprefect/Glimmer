@@ -3,12 +3,15 @@
    POST /api/admin — 管理后台（社长 / 干部）
    密码校验：请求体携带密码，与服务端 ADMIN_PASSWORD 做恒定时间比对，不符 401。
    动作 action：
-     list           待审核 + 已发布 + 已下架 + 报名列表
+     list           待审核 + 已发布 + 已下架 + 回收站 + 报名列表
      approve        审核通过（pending → approved）
      unpublish      下架（approved → offline，数据与图片保留）
      restore        恢复上架（offline → approved）
-     delete         删除作品（删数据库行，并尽力删 COS 文件）
-     batch          批量操作 { ids: [...], op: "approve" | "delete" }
+     trash          移入回收站（任一状态 → trash；数据库行与 COS 图片全保留，可恢复）
+     restore_trash  从回收站恢复到已下架（trash → offline，需再手动上架，防误发布）
+     delete         永久删除（删数据库行，并尽力删 COS 文件）——回收站里才用
+     batch          批量操作 { ids: [...], op: "approve" | "trash" | "delete" }
+     static_set     静态老作品状态 { id, state: "hidden" | "purged" | "visible" }
      update         编辑作品 { id, title, author, category, shot_date }
      submissions    只看报名列表
      mark_handled   标记报名已 / 未联系 { id, handled }
@@ -26,6 +29,7 @@ var backupLib = require("./_lib/backup");
 var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
 var watermarkLib = require("./_lib/watermark");
+var staticworks = require("./_lib/staticworks");
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -131,12 +135,14 @@ module.exports = async function (req, res) {
       var pending = await db.photos.pending();
       var approved = await db.photos.approved();
       var offline = await db.photos.offline();
+      var trash = await db.photos.trash();
       var subs = await db.submissions.all();
       http.json(req, res, 200, {
         ok: true,
         pending: pending || [],
         approved: approved || [],
         offline: offline || [],
+        trash: trash || [],
         submissions: subs || []
       });
       return;
@@ -183,7 +189,34 @@ module.exports = async function (req, res) {
       return;
     }
 
-    /* ---------------- 删除单个 ---------------- */
+    /* ---------------- 移入回收站 / 从回收站恢复（v2.6.0） ----------------
+       软删除：只改 status，数据库行与 COS 图片全部保留，误删零损失。
+       恢复到 offline（已下架）而非直接 approved，避免「恢复」等于「误发布」。 */
+    if (action === "trash" || action === "restore_trash") {
+      if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
+      var rowsT = await db.photos.byId(id);
+      if (!rowsT || !rowsT.length) return http.json(req, res, 404, { ok: false, error: "作品不存在或已删除" });
+      await db.photos.setStatus(id, action === "trash" ? "trash" : "offline");
+      http.json(req, res, 200, { ok: true });
+      return;
+    }
+
+    /* ---------------- 静态老作品：隐藏 / 永久移除 / 恢复（v2.6.0） ----------------
+       works.js 与图片文件在 Vercel 运行时只读，逻辑删除靠 COS 私有清单；
+       前台首页与作品集读取 /api/static-works 后过滤。 */
+    if (action === "static_set") {
+      var sid = http.clean(body.id, 80);
+      var sst = String(body.state || "");
+      if (!sid) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
+      if (["hidden", "purged", "visible"].indexOf(sst) === -1) {
+        return http.json(req, res, 400, { ok: false, error: "未知状态" });
+      }
+      await staticworks.set(sid, sst);
+      http.json(req, res, 200, { ok: true });
+      return;
+    }
+
+    /* ---------------- 删除单个（永久，回收站里才调用） ---------------- */
     if (action === "delete") {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少作品 id" });
       var rows1 = await db.photos.byId(id);
@@ -204,6 +237,12 @@ module.exports = async function (req, res) {
 
       if (op === "approve") {
         await db.photos.setStatusMany(ids, "approved");
+        http.json(req, res, 200, { ok: true, done: ids.length });
+        return;
+      }
+      if (op === "trash") {
+        /* v2.6.0：批量删除默认走软删除，保留图片，误选可恢复 */
+        await db.photos.setStatusMany(ids, "trash");
         http.json(req, res, 200, { ok: true, done: ids.length });
         return;
       }

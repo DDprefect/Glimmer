@@ -71,6 +71,8 @@
       <button class="admin-tab" type="button" data-tab="approved" role="tab">已发布 <b id="tab-approved">0</b></button>
       <button class="admin-tab" type="button" data-tab="offline" role="tab">已下架 <b id="tab-offline">0</b></button>
       <button class="admin-tab" type="button" data-tab="subs" role="tab">报名列表 <b id="tab-subs">0</b></button>
+      <button class="admin-tab" type="button" data-tab="trash" role="tab">回收站 <b id="tab-trash">0</b></button>
+      <button class="admin-tab" type="button" data-tab="static" role="tab">老作品 <b id="tab-static">0</b></button>
     </div>
 
     <div class="up-msg" id="panel-msg" hidden role="status"></div>
@@ -81,7 +83,7 @@
         <label class="check"><input type="checkbox" id="batch-all"> 全选</label>
         <span class="admin-batch__n" id="batch-n">已选 0 项</span>
         <button class="admin-op admin-op--ok" type="button" id="batch-approve">批量通过</button>
-        <button class="admin-op admin-op--del" type="button" id="batch-del">批量删除</button>
+        <button class="admin-op admin-op--del" type="button" id="batch-del">批量移入回收站</button>
       </div>
       <div id="pending-list"></div>
     </div>
@@ -99,6 +101,28 @@
     <div class="admin-pane" id="pane-offline">
       <p class="admin-subs-tip" style="margin-bottom:18px">这里是从作品集下架的作品，数据与 COS 图片均保留；可恢复上架或彻底删除。</p>
       <div id="offline-list"></div>
+    </div>
+
+    <!-- 回收站（v2.6.0）：投稿作品软删除 + 静态老作品隐藏，都可恢复；也可永久删除 -->
+    <div class="admin-pane" id="pane-trash">
+      <p class="admin-subs-tip" style="margin-bottom:18px">移入回收站的作品不会出现在官网上，但数据库记录与图片都保留。可随时恢复；「永久删除」才会真正清掉。</p>
+      <h3 class="admin-subhead">投稿作品</h3>
+      <div id="trash-list"></div>
+      <h3 class="admin-subhead">老作品（建站时收录）</h3>
+      <div id="trash-static-list"></div>
+    </div>
+
+    <!-- 老作品（v2.6.0）：78 张静态作品的可视化管理 -->
+    <div class="admin-pane" id="pane-static">
+      <div class="admin-pane-head">
+        <p class="admin-subs-tip">这些是建站时收录在 <code>works.js</code> 里的老作品。觉得不好的可以直接移入回收站（官网立刻不再展示），在回收站里还能恢复。</p>
+      </div>
+      <div class="admin-static-filter" id="static-filter">
+        <button class="admin-filter is-on" type="button" data-sf="all">全部</button>
+        <button class="admin-filter" type="button" data-sf="shown">展示中</button>
+        <button class="admin-filter" type="button" data-sf="hidden">回收站</button>
+      </div>
+      <div id="static-list" class="admin-static-grid"></div>
     </div>
 
     <!-- 报名 -->
@@ -122,6 +146,7 @@
 <input type="file" id="replace-file" accept="image/*" hidden aria-hidden="true">
 <div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
 
+<script src="assets/data/works.js"></script>
 <script src="assets/js/site.js"></script>
 <script src="assets/js/admin.js"></script>
 </body>
