@@ -697,11 +697,16 @@
   /* v2.6.0：静态老作品排除清单。works.js 在 Vercel 运行时只读，后台把
      「移入回收站 / 永久移除」的 id 写进 COS 私有清单，公开接口
      /api/static-works 返回；这里读取后 visibleWorks() 直接过滤，
-     首页与作品集监听到 glimmer:static-excluded 事件会重渲染。 */
+     首页与作品集监听到 glimmer:static-excluded 事件会重渲染。
+     v2.6.1：新增 staticShown —— works.js 里历史 hidden:true 的作品，
+     干部在后台点「恢复展示」后记入 shown，可覆盖原本的 hidden。 */
   var staticExcluded = {};
-  function setStaticExcluded(ids) {
+  var staticShown = {};
+  function setStaticExcluded(ids, shownIds) {
     staticExcluded = {};
     (ids || []).forEach(function (id) { if (id) staticExcluded[String(id)] = 1; });
+    staticShown = {};
+    (shownIds || []).forEach(function (id) { if (id) staticShown[String(id)] = 1; });
     try {
       document.dispatchEvent(new CustomEvent("glimmer:static-excluded"));
     } catch (e) { /* 老浏览器无 CustomEvent 构造：跳过事件，本页已有的过滤仍生效 */ }
@@ -710,13 +715,14 @@
     if (SHOT || location.protocol === "file:" || typeof fetch !== "function") return;
     fetch("api/static-works")
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok) setStaticExcluded(j.excluded); })
+      .then(function (j) { if (j && j.ok) setStaticExcluded(j.excluded, j.shown); })
       .catch(function () { /* 接口不可用：不排除任何作品，静默降级 */ });
   }
 
   function visibleWorks() {
     return (window.WORKS || []).filter(function (w) {
-      return !w.hidden && !staticExcluded[w.id];
+      if (staticExcluded[w.id]) return false;
+      return !w.hidden || !!staticShown[w.id];
     });
   }
 

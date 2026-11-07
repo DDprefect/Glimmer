@@ -1050,7 +1050,16 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "visible" });
   ok("static_set(visible) → 恢复展示", r.status === 200);
   r = await call(P, "GET", "/api/static-works");
-  ok("恢复后清单为空", r.json.excluded.length === 0, JSON.stringify(r.json));
+  ok("恢复后 excluded 清空、且写入 shown（v2.6.1 强制展示）", r.json.excluded.length === 0 && r.json.shown.indexOf("hanlou-01") !== -1, JSON.stringify(r.json));
+  /* v2.6.1：works.js 里历史 hidden 的作品，靠 shown 才能重新展示 */
+  ok("清单接口返回 shown 数组（v2.6.1）", Array.isArray(r.json.shown), JSON.stringify(r.json.shown));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "view-04", state: "visible" });
+  ok("历史隐藏作品可通过 visible 写入 shown（v2.6.1）", r.status === 200);
+  r = await call(P, "GET", "/api/static-works");
+  ok("shown 同时包含两张被恢复的作品", r.json.shown.indexOf("view-04") !== -1 && r.json.shown.indexOf("hanlou-01") !== -1, JSON.stringify(r.json.shown));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "view-04", state: "hidden" });
+  r = await call(P, "GET", "/api/static-works");
+  ok("移入回收站后 shown 被摘除（互斥）", r.json.shown.indexOf("view-04") === -1 && r.json.hidden.indexOf("view-04") !== -1, JSON.stringify(r.json));
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", id: "hanlou-01", state: "bogus" });
   ok("static_set 非法状态 → 400", r.status === 400);
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "static_set", state: "hidden" });

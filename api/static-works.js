@@ -26,10 +26,11 @@ module.exports = async function (req, res) {
       ok: true,
       hidden: list.hidden,
       purged: list.purged,
+      shown: list.shown,
       excluded: list.hidden.concat(list.purged)
     });
   } catch (e) {
     /* 读失败 → 空清单降级；前台照常显示全部静态作品 */
-    http.json(req, res, 200, { ok: false, hidden: [], purged: [], excluded: [], error: e.message || "清单读取失败" });
+    http.json(req, res, 200, { ok: false, hidden: [], purged: [], shown: [], excluded: [], error: e.message || "清单读取失败" });
   }
 };

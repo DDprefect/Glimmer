@@ -24,7 +24,7 @@
   var panelMsg = $("#panel-msg");
 
   var data = { pending: [], approved: [], offline: [], trash: [], submissions: [] };
-  var staticWorks = { hidden: [], purged: [], excluded: [] };
+  var staticWorks = { hidden: [], purged: [], shown: [], excluded: [] };
   var subsFilter = "all";
   var staticFilter = "all";
 
@@ -205,6 +205,8 @@
   function staticState(w) {
     if (staticWorks.purged.indexOf(w.id) !== -1) return "purged";
     if (staticWorks.hidden.indexOf(w.id) !== -1) return "hidden";
+    /* v2.6.1：被「强制展示」的历史隐藏作品，等同于正常展出 */
+    if (staticWorks.shown.indexOf(w.id) !== -1) return "shown";
     return w.hidden ? "legacy" : "shown";
   }
 
@@ -212,8 +214,13 @@
     var state = staticState(w);
     var label = { purged: "已永久移除", hidden: "回收站", legacy: "原本未展出", shown: "展示中" }[state];
     var ops = "";
-    if (state === "shown" || state === "legacy") {
+    if (state === "shown") {
       ops = '<button class="admin-op admin-op--del" type="button" data-sact="hidden" data-id="' + esc(w.id) + '">移入回收站</button>' +
+            '<button class="admin-op" type="button" data-sact="purged" data-id="' + esc(w.id) + '">永久移除</button>';
+    } else if (state === "legacy") {
+      /* 历史隐藏作品：可恢复展示（写入 shown 覆盖 works.js 的 hidden） */
+      ops = '<button class="admin-op admin-op--ok" type="button" data-sact="visible" data-id="' + esc(w.id) + '">恢复展示</button>' +
+            '<button class="admin-op admin-op--del" type="button" data-sact="hidden" data-id="' + esc(w.id) + '">移入回收站</button>' +
             '<button class="admin-op" type="button" data-sact="purged" data-id="' + esc(w.id) + '">永久移除</button>';
     } else {
       ops = '<button class="admin-op admin-op--ok" type="button" data-sact="visible" data-id="' + esc(w.id) + '">撤销，恢复展示</button>' +
@@ -236,8 +243,8 @@
     var all = window.WORKS || [];
     var list = all.filter(function (w) {
       var s = staticState(w);
-      if (staticFilter === "shown") return s === "shown" || s === "legacy";
-      if (staticFilter === "hidden") return s === "hidden" || s === "purged";
+      if (staticFilter === "shown") return s === "shown";
+      if (staticFilter === "off") return s !== "shown";
       return true;
     });
     var host = $("#static-list");
@@ -255,6 +262,18 @@
     if (tab) tab.textContent = all.length;
     var t2 = $("#tab-trash");
     if (t2) t2.textContent = data.trash.length + staticWorks.hidden.length + staticWorks.purged.length;
+
+    /* v2.6.1：把「历史隐藏、可恢复」的作品数直接标出来，干部不用自己翻 */
+    var legacyTip = $("#static-legacy-tip");
+    if (legacyTip) {
+      var legacy = all.filter(function (w) { return staticState(w) === "legacy"; });
+      legacyTip.hidden = legacy.length === 0;
+      legacyTip.textContent = legacy.length
+        ? "有 " + legacy.length + " 张早期隐藏的作品（" +
+          legacy.slice(0, 4).map(function (w) { return w.title || w.id; }).join("、") +
+          (legacy.length > 4 ? " 等" : "") + "），想看就点「恢复展示」，会立刻出现在官网。"
+        : "";
+    }
   }
 
   /* ---------------- 渲染 ---------------- */
@@ -362,6 +381,7 @@
       if (sw && sw.ok) {
         staticWorks.hidden = sw.hidden || [];
         staticWorks.purged = sw.purged || [];
+        staticWorks.shown = sw.shown || [];
         staticWorks.excluded = sw.excluded || staticWorks.hidden.concat(staticWorks.purged);
       }
       render();

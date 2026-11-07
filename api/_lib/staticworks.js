@@ -9,7 +9,9 @@
 
    存储：COS 对象 _config/hidden-works.json
      { "hidden": ["hanlou-01", ...],   // 移入回收站，可恢复
-       "purged": ["hanlou-02", ...] }  // 永久移除，后台不再列出
+       "purged": ["hanlou-02", ...],   // 永久移除，后台不再列出
+       "shown":  ["view-04", ...] }    // v2.6.1：强制展示——把 works.js 里
+                                       // 历史 hidden:true 的作品重新放出来
    读写一律走签名（cos.sign），服务端自访不受桶匿名策略影响。
    ⚠️ 桶为「公有读私有写」：清单内容只有作品 id（与公开的 works.js 一致），
    不含隐私；若希望完全禁止匿名读，可在控制台按 _backup/* 同款加一条
@@ -26,7 +28,7 @@ var KEY = "_config/hidden-works.json";
 var MAX_IDS = 500;
 
 function emptyList() {
-  return { hidden: [], purged: [] };
+  return { hidden: [], purged: [], shown: [] };
 }
 
 /* 只接受字符串 id、去重、限量，防脏数据把清单撑爆 */
@@ -46,7 +48,7 @@ function cleanIds(arr) {
 
 function normalize(v) {
   if (!v || typeof v !== "object") return emptyList();
-  return { hidden: cleanIds(v.hidden), purged: cleanIds(v.purged) };
+  return { hidden: cleanIds(v.hidden), purged: cleanIds(v.purged), shown: cleanIds(v.shown) };
 }
 
 /* 读取清单。404 = 还没建过，视为空清单；其它错误抛带标签的 Error */
@@ -81,7 +83,10 @@ async function write(list) {
 }
 
 /* 设置单个作品状态：hidden（回收站）/ purged（永久移除）/ visible（恢复展示）
-   先把 id 从两个列表里都摘掉，再按目标状态放回，保证互斥。 */
+   三个列表互斥：先摘干净，再按目标状态放回。
+   v2.6.1：visible 会额外写入 shown —— works.js 里历史 hidden:true 的作品
+   靠它才能重新展示（前台判定：(!w.hidden || shown) && !excluded）。
+   对本来就没 hidden 的作品，shown 只是冗余标记，无副作用。 */
 async function set(id, state) {
   if (typeof id !== "string" || !id.trim()) throw new Error("缺少作品 id");
   var workId = id.trim().slice(0, 80);
@@ -89,18 +94,24 @@ async function set(id, state) {
     throw new Error("未知状态：" + state);
   }
   var list = await read();
-  ["hidden", "purged"].forEach(function (k) {
+  ["hidden", "purged", "shown"].forEach(function (k) {
     list[k] = list[k].filter(function (x) { return x !== workId; });
   });
   if (state === "hidden") list.hidden.unshift(workId);
   if (state === "purged") list.purged.unshift(workId);
+  if (state === "visible") list.shown.unshift(workId);
   return write(list);
 }
 
-/* 前台只要「不展示」的并集；后台管理要分开的 hidden / purged */
+/* 前台：excluded 是「不展示」并集，shown 是「强制展示」覆盖名单 */
 function publicList(list) {
   var l = normalize(list);
-  return { hidden: l.hidden, purged: l.purged, excluded: l.hidden.concat(l.purged) };
+  return {
+    hidden: l.hidden,
+    purged: l.purged,
+    shown: l.shown,
+    excluded: l.hidden.concat(l.purged)
+  };
 }
 
 module.exports = {

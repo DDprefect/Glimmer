@@ -2715,3 +2715,10 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .admin-static__meta i { font-size: .74rem; font-style: normal; opacity: .6; }
 .admin-static__ops { padding: 4px 12px 12px; display: flex; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 560px) { .admin-static-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+
+/* v2.6.1：老作品面板的历史隐藏提示 */
+.admin-legacy-tip {
+  margin: 0 0 18px; padding: 10px 14px; font-size: .84rem; line-height: 1.7;
+  border-left: 3px solid var(--gold, #BF8B34);
+  background: rgba(191, 139, 52, .08); border-radius: 0 8px 8px 0;
+}

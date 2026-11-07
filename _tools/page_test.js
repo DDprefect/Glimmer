@@ -199,6 +199,13 @@ async function testGallery() {
   var countAfter = Number(countEl ? countEl.getAttribute("data-count") : 0);
   ok("排除清单到达 → 展出计数减 1", countAfter === countBefore - 1, countBefore + " → " + countAfter);
   ok("被移除的静态作品不再出现在网格", !d.querySelector('#works-grid .work[data-id="hanlou-01"]'), d.querySelectorAll("#works-grid .work").length + " 张");
+
+  /* v2.6.1：shown 能覆盖 works.js 里的 hidden（历史隐藏作品可恢复展示） */
+  dom.window.Glimmer.setStaticExcluded([], []);
+  var baseCount = dom.window.Glimmer.visibleWorks().length;
+  dom.window.Glimmer.setStaticExcluded([], ["view-04"]);
+  var shownCount = dom.window.Glimmer.visibleWorks().length;
+  ok("shown 覆盖 hidden → 可见作品 +1（v2.6.1）", shownCount === baseCount + 1, baseCount + " → " + shownCount);
   domCat.window.close();
   dom.window.close(); dom2.window.close(); dom3.window.close();
 }
@@ -379,7 +386,7 @@ async function testAdmin() {
       /* v2.6.0：后台加载静态老作品清单（公开只读接口） */
       if (String(url).indexOf("api/static-works") !== -1) {
         return Promise.resolve({ ok: true, status: 200, json: function () {
-          return Promise.resolve({ ok: true, hidden: ["hanlou-01"], purged: ["sports-01"], excluded: ["hanlou-01", "sports-01"] });
+          return Promise.resolve({ ok: true, hidden: ["hanlou-01"], purged: ["sports-01"], shown: [], excluded: ["hanlou-01", "sports-01"] });
         } });
       }
       if (mode === "401") {
@@ -548,13 +555,26 @@ async function testAdmin() {
   ok("老作品面板列出 works.js 的静态作品", d.getElementById("pane-static").classList.contains("is-on") && statGrid.querySelectorAll(".admin-static").length > 50, statGrid.querySelectorAll(".admin-static").length + " 张");
   ok("清单里的作品标注为回收站/已永久移除", !!statGrid.querySelector('.admin-static[data-id="hanlou-01"][data-state="hidden"]') && !!statGrid.querySelector('.admin-static[data-id="sports-01"][data-state="purged"]'));
   ok("回收站里也列出被隐藏的老作品", /hanlou-01|微光|寒楼/.test(d.getElementById("trash-static-list").textContent) || d.querySelectorAll("#trash-static-list .admin-static").length === 2, d.querySelectorAll("#trash-static-list .admin-static").length + " 张");
-  d.querySelector('#static-filter .admin-filter[data-sf="hidden"]').click();
-  ok("老作品筛选「回收站」只显示被移除的", statGrid.querySelectorAll(".admin-static").length === 2, statGrid.querySelectorAll(".admin-static").length + " 张");
+  d.querySelector('#static-filter .admin-filter[data-sf="off"]').click();
+  /* 4 张 works.js 历史 hidden + 清单里的 hanlou-01(hidden) / sports-01(purged) */
+  ok("老作品筛选「未展示」= 历史隐藏 4 张 + 清单移除 2 张",
+    statGrid.querySelectorAll(".admin-static").length === 6,
+    statGrid.querySelectorAll(".admin-static").length + " 张");
   callLog.length = 0;
   var sbtn = statGrid.querySelector('button[data-sact="visible"]');
   sbtn.click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点恢复展示 → 请求 static_set(visible)", callLog.some(function (b) { return b && b.action === "static_set" && b.state === "visible"; }), JSON.stringify(callLog));
+
+  /* v2.6.1：works.js 里历史 hidden 的作品（原本未展出）也能在后台恢复展示 */
+  d.querySelector('#static-filter .admin-filter[data-sf="all"]').click();
+  var legacyCard = statGrid.querySelector('.admin-static[data-state="legacy"]');
+  ok("历史隐藏作品标为「原本未展出」且带恢复按钮",
+    !!legacyCard && !!legacyCard.querySelector('button[data-sact="visible"]'),
+    legacyCard ? legacyCard.getAttribute("data-id") : "no legacy card");
+  ok("历史隐藏作品默认不出现在展示中（legacy 计数 > 0）",
+    statGrid.querySelectorAll('.admin-static[data-state="legacy"]').length === 4,
+    statGrid.querySelectorAll('.admin-static[data-state="legacy"]').length + " 张");
 
   /* 选项卡切换（回到报名，验证筛选选择器未串台） */
   var subsTab = d.querySelector('.admin-tab[data-tab="subs"]');
