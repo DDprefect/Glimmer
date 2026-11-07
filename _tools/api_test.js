@@ -245,8 +245,9 @@ function startMockSupabase() {
         return send(204, null);
       }
       if (req.method === "DELETE") {
-        var df = idFilter();
-        state[m[1]] = table.filter(function (r) { return !df || !df(r); });
+        /* v2.7.2：支持任意列过滤的删除（活动报名按 event_id 批量删）；无 id 时退回通用 matches */
+        var df = idFilter() || function (r) { return matches(r); };
+        state[m[1]] = table.filter(function (r) { return !df(r); });
         return send(204, null);
       }
       send(405, { message: "method not allowed" });
@@ -1154,8 +1155,20 @@ async function testApi() {
   r = await call(P, "GET", "/api/events?id=" + evId);
   ok("归档活动详情仍可访问（回顾页）且作品在", r.status === 200 && r.json.event.status === "archived");
 
+  /* v2.7.2：进行中活动仍不可删（先造一个 published 来测拒绝），先归档才能删 */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_save", title: "进行中不可删" });
+  var pubId = String(r.json.id);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_publish", id: pubId });
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: pubId });
+  ok("进行中活动不可删除 → 400", r.status === 400, JSON.stringify(r.json));
+  /* v2.7.2：归档活动可删，连带清理报名、解除作品挂靠 */
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: evId });
-  ok("已发布活动不可删除 → 400", r.status === 400);
+  ok("归档活动删除 → 200 且清理报名 2 条", r.status === 200 && r.json.ok && r.json.regsDeleted === 2, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_regs", id: evId });
+  ok("活动删除后报名记录已清空", r.json.submissions.length === 0, JSON.stringify(r.json));
+  ok("挂靠作品已解除关联（event_id 置空，作品保留）", mock.state.photos.some(function (p) { return p.title === "活动作品" && p.event_id === null; }), JSON.stringify(r.json).slice(0, 100));
+  r = await call(P, "GET", "/api/events?id=" + evId);
+  ok("活动行已删除 → 详情 404", r.status === 404);
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_save", title: "纯草稿" });
   var draftId = String(r.json.id);
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: draftId });

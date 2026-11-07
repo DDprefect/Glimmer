@@ -15,7 +15,7 @@
      event_save     创建/编辑活动 { id?, title, content, activity_date }
      event_publish  发布活动（draft → published，官网出现 + 上传入口出现）
      event_archive  归档活动（published → archived：官网首页消失、报名关闭、上传入口消失；活动页保留回顾；记录与名单全保留）
-     event_delete   删除活动（仅 draft 可删；published 请先归档）
+     event_delete   删除活动（draft 直接删；archived 连带删除其报名记录并解除作品挂靠；published 须先归档）
      event_regs     某活动报名列表 { id }
      export_event   导出某活动报名 CSV { id }
      update         编辑作品 { id, title, author, category, shot_date }
@@ -350,12 +350,28 @@ module.exports = async function (req, res) {
       var delRows = await db.events.byId(delId);
       var delEv = Array.isArray(delRows) ? delRows[0] : null;
       if (!delEv) return http.json(req, res, 404, { ok: false, error: "活动不存在" });
-      /* 只有草稿能删：已发布/归档的活动有报名与投稿挂靠，删除会留孤儿记录 */
-      if (delEv.status !== "draft") {
-        return http.json(req, res, 400, { ok: false, error: "已发布/已归档的活动保留记录，不能删除（可归档后不再展示）" });
+      /* 进行中不能删：官网正在展示，误点代价太大——先归档再删（两步防手滑） */
+      if (delEv.status === "published") {
+        return http.json(req, res, 400, { ok: false, error: "进行中的活动不能删除，请先归档" });
+      }
+      /* v2.7.2：归档活动可删。连带处理挂靠数据：
+         报名记录一并真删（参与人信息随活动消失，删前请导出 CSV）；
+         投稿照片只解除挂靠（event_id 置 null），作品本身保留在作品集。 */
+      var regsDeleted = 0;
+      try {
+        var delRegs = await db.submissions.byEvent(delId);
+        if (delRegs && delRegs.length) {
+          await db.rest("DELETE", "submissions?event_id=eq." + encodeURIComponent(delId));
+          regsDeleted = delRegs.length;
+        }
+        await db.rest("PATCH", "photos?event_id=eq." + encodeURIComponent(delId), { event_id: null });
+      } catch (eDetach) {
+        /* 挂靠数据清理失败不阻塞活动删除本身，但要把事实告诉前端 */
+        await db.events.remove(delId);
+        return http.json(req, res, 200, { ok: true, regsDeleted: regsDeleted, detachError: eDetach.message || "挂靠数据清理失败" });
       }
       await db.events.remove(delId);
-      return http.json(req, res, 200, { ok: true });
+      return http.json(req, res, 200, { ok: true, regsDeleted: regsDeleted });
     }
 
     if (action === "event_regs") {

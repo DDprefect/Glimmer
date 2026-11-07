@@ -355,7 +355,8 @@
             '<button class="admin-op admin-op--del" type="button" data-eact="archive" data-id="' + e.id + '">归档（结束活动）</button>';
     } else {
       ops = '<button class="admin-op" type="button" data-eact="regs" data-id="' + e.id + '">查看报名</button>' +
-            '<button class="admin-op admin-op--ok" type="button" data-eact="publish" data-id="' + e.id + '">重新发布</button>';
+            '<button class="admin-op admin-op--ok" type="button" data-eact="publish" data-id="' + e.id + '">重新发布</button>' +
+            '<button class="admin-op admin-op--del" type="button" data-eact="delete" data-id="' + e.id + '">删除</button>';
     }
     var st = EVENT_ST[e.status] || e.status;
     var excerpt = String(e.content || "").slice(0, 60);
@@ -936,10 +937,24 @@
       return;
     }
     if (act === "delete") {
-      if (!window.confirm("删除草稿活动？此操作不可恢复。")) return;
+      /* v2.7.2：草稿直接删；归档活动删除会连带清理报名记录（作品解除挂靠但保留）。
+         强确认文案提醒先导出 CSV 备份。 */
+      var delEv = data.events.filter(function (x) { return String(x.id) === String(id); })[0];
+      var isDraft = delEv && delEv.status === "draft";
+      var delMsg = isDraft
+        ? "删除草稿活动？此操作不可恢复。"
+        : "永久删除该活动？\n\n· 其报名记录将一并删除（建议先点「查看报名」导出 CSV 备份）\n· 挂靠的作品会解除与活动的关联，作品本身保留\n\n此操作不可恢复，确定？";
+      if (!window.confirm(delMsg)) return;
       btn.disabled = true;
-      api("event_delete", { id: id }).then(function () { toast("草稿已删除。", "is-ok"); return load(); })
-        .catch(errHandler).then(function () { btn.disabled = false; });
+      api("event_delete", { id: id }).then(function (j) {
+        eventRegs = null;
+        var regsWrap = $("#event-regs-wrap");
+        if (regsWrap) regsWrap.hidden = true;
+        var extra = j && j.regsDeleted ? "，同时清理报名记录 " + j.regsDeleted + " 条" : "";
+        if (j && j.detachError) toast("活动已删除，但挂靠数据清理失败：" + j.detachError, "is-err");
+        else toast("活动已删除" + extra + "。", "is-ok");
+        return load();
+      }).catch(errHandler).then(function () { btn.disabled = false; });
       return;
     }
     if (act === "edit") {
