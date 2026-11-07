@@ -80,6 +80,8 @@ module.exports = async function (req, res) {
     var title = http.clean(u.searchParams.get("title"), 50);
     var author = http.clean(u.searchParams.get("author"), 30);
     var shot_date = http.clean(u.searchParams.get("shot_date"), 10);
+    /* v2.7.0：活动投稿挂靠（可选）——eventId 指向进行中的活动，照片仍走先审后发 */
+    var eventId = http.clean(u.searchParams.get("eventId"), 20);
 
     /* EXIF 拍摄参数（可选）：前端从原图解析后随查询参数提交，
        字段级白名单清洗，任何不合法内容一律丢弃，不影响投稿 */
@@ -101,6 +103,20 @@ module.exports = async function (req, res) {
     }
     if (shot_date && !DATE_RE.test(shot_date)) {
       return http.json(req, res, 400, { ok: false, error: "拍摄日期格式应为 YYYY-MM-DD" });
+    }
+
+    /* 活动挂靠校验（v2.7.0）：活动必须存在且进行中；未建表/未填则不挂靠 */
+    var eventRef = null;
+    if (eventId) {
+      if (!/^\d+$/.test(eventId)) {
+        return http.json(req, res, 400, { ok: false, error: "活动标识不合法" });
+      }
+      var evRows = await db.events.byId(eventId);
+      var ev = Array.isArray(evRows) ? evRows[0] : null;
+      if (!ev || ev.status !== "published") {
+        return http.json(req, res, 400, { ok: false, error: "该活动当前不接受投稿" });
+      }
+      eventRef = ev;
     }
 
     var buf = await http.readRaw(req, MAX_BYTES);
@@ -138,7 +154,8 @@ module.exports = async function (req, res) {
         shot_date: shot_date || null,
         exif: exif,
         file_url: fileUrl,
-        status: "pending"
+        status: "pending",
+        event_id: eventRef ? Number(eventRef.id) : null
       });
       photo = Array.isArray(created) ? created[0] : created;
     } catch (e) {

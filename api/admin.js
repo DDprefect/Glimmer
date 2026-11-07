@@ -12,6 +12,12 @@
      delete         永久删除（删数据库行，并尽力删 COS 文件）——回收站里才用
      batch          批量操作 { ids: [...], op: "approve" | "trash" | "delete" }
      static_set     静态老作品状态 { id, state: "hidden" | "purged" | "visible" }
+     event_save     创建/编辑活动 { id?, title, content, activity_date }
+     event_publish  发布活动（draft → published，官网出现 + 上传入口出现）
+     event_archive  归档活动（published → archived：官网首页消失、报名关闭、上传入口消失；活动页保留回顾；记录与名单全保留）
+     event_delete   删除活动（仅 draft 可删；published 请先归档）
+     event_regs     某活动报名列表 { id }
+     export_event   导出某活动报名 CSV { id }
      update         编辑作品 { id, title, author, category, shot_date }
      submissions    只看报名列表
      mark_handled   标记报名已 / 未联系 { id, handled }
@@ -30,6 +36,9 @@ var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
 var watermarkLib = require("./_lib/watermark");
 var staticworks = require("./_lib/staticworks");
+
+/* 活动状态文案（导出/展示共用） */
+var EVENT_STATUS_TEXT = { draft: "草稿", published: "进行中", archived: "已归档" };
 
 var CATEGORIES = ["校园纪实", "校外采风", "城市与远方", "人像与视觉"];
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -136,14 +145,26 @@ module.exports = async function (req, res) {
       var approved = await db.photos.approved();
       var offline = await db.photos.offline();
       var trash = await db.photos.trash();
-      var subs = await db.submissions.all();
+      /* v2.7.0：报名列表只含招新报名；活动报名在「活动」标签按活动查看 */
+      var subs = await db.submissions.recruits();
+      /* 活动列表：表未建时降级为空 + 提示，不拖垮整个后台 */
+      var evList = [];
+      var evMissing = false;
+      try {
+        evList = await db.events.list();
+      } catch (evErr) {
+        if (db.events.isMissingTable(evErr)) evMissing = true;
+        else throw evErr;
+      }
       http.json(req, res, 200, {
         ok: true,
         pending: pending || [],
         approved: approved || [],
         offline: offline || [],
         trash: trash || [],
-        submissions: subs || []
+        submissions: subs || [],
+        events: evList || [],
+        eventsMissing: evMissing
       });
       return;
     }
@@ -296,6 +317,69 @@ module.exports = async function (req, res) {
       return;
     }
 
+    /* ---------------- 活动管理（v2.7.0） ---------------- */
+    if (action === "event_save") {
+      var evId = http.clean(body.id, 20);
+      var evTitle = http.clean(body.title, 60);
+      var evContent = http.clean(body.content, 5000);
+      var evDate = http.clean(body.activity_date, 20);
+      if (!evTitle) return http.json(req, res, 400, { ok: false, error: "请填写活动标题" });
+      if (evDate && !DATE_RE.test(evDate)) {
+        return http.json(req, res, 400, { ok: false, error: "活动日期格式应为 YYYY-MM-DD（可留空）" });
+      }
+      var evRow = { title: evTitle, content: evContent, activity_date: evDate || "" };
+      if (evId) {
+        await db.events.update(evId, evRow);
+        return http.json(req, res, 200, { ok: true, id: evId });
+      }
+      var created = await db.events.create(evRow);
+      var newId = Array.isArray(created) && created[0] ? created[0].id : null;
+      return http.json(req, res, 200, { ok: true, id: newId });
+    }
+
+    if (action === "event_publish" || action === "event_archive") {
+      var stId = http.clean(body.id, 20);
+      if (!stId) return http.json(req, res, 400, { ok: false, error: "缺少活动 id" });
+      await db.events.update(stId, { status: action === "event_publish" ? "published" : "archived" });
+      return http.json(req, res, 200, { ok: true });
+    }
+
+    if (action === "event_delete") {
+      var delId = http.clean(body.id, 20);
+      if (!delId) return http.json(req, res, 400, { ok: false, error: "缺少活动 id" });
+      var delRows = await db.events.byId(delId);
+      var delEv = Array.isArray(delRows) ? delRows[0] : null;
+      if (!delEv) return http.json(req, res, 404, { ok: false, error: "活动不存在" });
+      /* 只有草稿能删：已发布/归档的活动有报名与投稿挂靠，删除会留孤儿记录 */
+      if (delEv.status !== "draft") {
+        return http.json(req, res, 400, { ok: false, error: "已发布/已归档的活动保留记录，不能删除（可归档后不再展示）" });
+      }
+      await db.events.remove(delId);
+      return http.json(req, res, 200, { ok: true });
+    }
+
+    if (action === "event_regs") {
+      var regsId = http.clean(body.id, 20);
+      if (!regsId) return http.json(req, res, 400, { ok: false, error: "缺少活动 id" });
+      var regs = await db.submissions.byEvent(regsId);
+      return http.json(req, res, 200, { ok: true, submissions: regs || [] });
+    }
+
+    /* ---------------- 导出活动报名 CSV ---------------- */
+    if (action === "export_event") {
+      var exId = http.clean(body.id, 20);
+      if (!exId) return http.json(req, res, 400, { ok: false, error: "缺少活动 id" });
+      var exRows = await db.events.byId(exId);
+      var exEv = Array.isArray(exRows) ? exRows[0] : null;
+      if (!exEv) return http.json(req, res, 404, { ok: false, error: "活动不存在" });
+      var exRegs = await db.submissions.byEvent(exId);
+      sendCsv(req, res, "glimmer-event-" + exId + "-regs.csv", toCsv(exRegs, SUB_COLS, function (v, key) {
+        if (key === "handled") return v ? "已联系" : "未联系";
+        return v;
+      }));
+      return;
+    }
+
     /* ---------------- 报名已联系 ---------------- */
     if (action === "mark_handled") {
       if (!id) return http.json(req, res, 400, { ok: false, error: "缺少报名 id" });
@@ -305,14 +389,14 @@ module.exports = async function (req, res) {
     }
 
     if (action === "submissions") {
-      var all = await db.submissions.all();
+      var all = await db.submissions.recruits();
       http.json(req, res, 200, { ok: true, submissions: all || [] });
       return;
     }
 
-    /* ---------------- 导出报名 CSV ---------------- */
+    /* ---------------- 导出报名 CSV（招新） ---------------- */
     if (action === "export") {
-      var allRows = await db.submissions.all();
+      var allRows = await db.submissions.recruits();
       sendCsv(req, res, "glimmer-submissions.csv", toCsv(allRows, SUB_COLS, function (v, key) {
         if (key === "handled") return v ? "已联系" : "未联系";
         return v;

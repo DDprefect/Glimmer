@@ -73,6 +73,7 @@
       <button class="admin-tab" type="button" data-tab="subs" role="tab">报名列表 <b id="tab-subs">0</b></button>
       <button class="admin-tab" type="button" data-tab="trash" role="tab">回收站 <b id="tab-trash">0</b></button>
       <button class="admin-tab" type="button" data-tab="static" role="tab">老作品 <b id="tab-static">0</b></button>
+      <button class="admin-tab" type="button" data-tab="events" role="tab">活动 <b id="tab-events">0</b></button>
     </div>
 
     <div class="up-msg" id="panel-msg" hidden role="status"></div>
@@ -124,6 +125,33 @@
         <button class="admin-filter" type="button" data-sf="off">未展示</button>
       </div>
       <div id="static-list" class="admin-static-grid"></div>
+    </div>
+
+    <!-- 活动（v2.7.0）：创建 / 编辑 / 发布 / 归档 + 每活动报名管理 -->
+    <div class="admin-pane" id="pane-events">
+      <div class="admin-pane-head">
+        <p class="admin-subs-tip">发布后活动会出现在官网首页，投稿页自动出现「参与该活动」入口；归档后首页与上传入口消失，但活动页保留为「已结束」回顾，报名名单与作品记录全部保留。</p>
+        <button class="btn btn--sm" type="button" id="event-new">＋ 新建活动</button>
+      </div>
+      <p class="admin-subs-tip" id="events-missing" style="color:var(--red);display:none">数据库还没有活动表：请在 Supabase SQL Editor 执行 <code>_tools/EVENTS_SQL.sql</code>（一次性，幂等），执行完刷新本页即可。</p>
+      <form class="admin-event-form" id="event-form" hidden>
+        <input class="admin-edit__t" id="event-title" type="text" maxlength="60" placeholder="活动标题（如：秋季外拍 · 柳江日落）" required>
+        <input class="admin-edit__d" id="event-date" type="date" title="活动日期（仅展示用）">
+        <textarea class="admin-event__content" id="event-content" rows="8" maxlength="5000" placeholder="活动介绍：时间地点、拍摄主题、器材建议、注意事项……可以写多段，发布后原样展示在活动页。"></textarea>
+        <div class="admin-edit__ops">
+          <button class="admin-op admin-op--ok" type="submit" id="event-save-btn">保存</button>
+          <button class="admin-op" type="button" id="event-cancel">取消</button>
+        </div>
+      </form>
+      <div id="events-list"></div>
+      <div id="event-regs-wrap" hidden>
+        <h3 class="admin-subhead" id="event-regs-title">报名列表</h3>
+        <div class="admin-subs-bar">
+          <span class="admin-batch__n" id="event-regs-n"></span>
+          <button class="btn btn--sm" type="button" id="event-regs-export">导出本活动报名 CSV</button>
+        </div>
+        <div class="admin-table-wrap" id="event-regs-table"></div>
+      </div>
     </div>
 
     <!-- 报名 -->

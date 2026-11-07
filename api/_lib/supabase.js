@@ -106,6 +106,10 @@ var photos = {
   removeMany: function (ids) {
     return rest("DELETE", "photos?id=in.(" + ids.map(encodeURIComponent).join(",") + ")");
   },
+  /* 活动相册（v2.7.0）：该活动下已审核作品，按时间倒序 */
+  byEvent: function (eventId) {
+    return rest("GET", "photos?select=*&status=eq.approved&event_id=eq." + encodeURIComponent(eventId) + "&order=created_at.desc");
+  },
   /* 全量（后台导出用） */
   all: function () {
     return rest("GET", "photos?select=*&order=created_at.desc");
@@ -130,6 +134,22 @@ var submissions = {
   all: function () {
     return rest("GET", "submissions?select=*&order=created_at.desc");
   },
+  /* 某活动的报名列表（v2.7.0）；旧库无 event_id 列时降级为空列表 */
+  byEvent: function (eventId) {
+    return rest("GET", "submissions?select=*&event_id=eq." + encodeURIComponent(eventId) + "&order=created_at.desc")
+      .catch(function (e) {
+        if (isMissingColumn(e, "event_id")) return [];
+        throw e;
+      });
+  },
+  /* 招新报名（排除活动报名）；旧库无 event_id 列时回退为全量（那时也没有活动报名） */
+  recruits: function () {
+    return rest("GET", "submissions?select=*&event_id=is.null&order=created_at.desc")
+      .catch(function (e) {
+        if (isMissingColumn(e, "event_id")) return rest("GET", "submissions?select=*&order=created_at.desc");
+        throw e;
+      });
+  },
   create: function (row) {
     return rest("POST", "submissions", row);
   },
@@ -138,4 +158,41 @@ var submissions = {
   }
 };
 
-module.exports = { photos: photos, submissions: submissions, rest: rest };
+/* ---------------- 活动系统（v2.7.0） ----------------
+   events 表由 _tools/EVENTS_SQL.sql 建立；表未建时 rest() 会抛
+   PGRST205/404，这里的降级原则：
+   - 公开接口读不到 → 视为「没有活动」，前台区块整体隐藏，站点无感；
+   - 后台写操作 → 明确报错并提示跑 SQL，绝不静默吞掉。 */
+function isMissingTable(e) {
+  return /PGRST205|PGRST204|does not exist|Could not find the table|42703|404|not found/i.test(String(e && e.message || ""));
+}
+
+/* 列不存在（旧库未升级）：42703 或 PostgREST 的 PGRST204/205 文案 */
+function isMissingColumn(e, col) {
+  var msg = String(e && e.message || "");
+  return new RegExp(col + "|42703|PGRST20[45]|schema cache", "i").test(msg);
+}
+
+var events = {
+  list: function () {
+    return rest("GET", "events?select=*&order=created_at.desc");
+  },
+  byId: function (id) {
+    return rest("GET", "events?select=*&id=eq." + encodeURIComponent(id));
+  },
+  create: function (row) {
+    return rest("POST", "events", row);
+  },
+  update: function (id, row) {
+    row.updated_at = new Date().toISOString();
+    return rest("PATCH", "events?id=eq." + encodeURIComponent(id), row);
+  },
+  remove: function (id) {
+    return rest("DELETE", "events?id=eq." + encodeURIComponent(id));
+  },
+  isMissingTable: isMissingTable,
+  isMissingColumn: isMissingColumn,
+  MISSING_HINT: "数据库缺 events 表：请在 Supabase SQL Editor 执行 _tools/EVENTS_SQL.sql（一次性，幂等）"
+};
+
+module.exports = { photos: photos, submissions: submissions, events: events, rest: rest };

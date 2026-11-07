@@ -125,6 +125,8 @@ function startMockSupabase() {
     ],
     nextPhoto: 4,
     nextSub: 4,
+    nextEvent: 1,
+    events: [],
     sawServiceKey: false,
     rejectExifCol: false,
     /* 模拟旧库没有 handled 列：select 里含 handled 的查询一律 42703 */
@@ -149,11 +151,11 @@ function startMockSupabase() {
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify(data));
       }
-      var m = /^\/rest\/v1\/(photos|submissions)$/.exec(u.pathname);
+      var m = /^\/rest\/v1\/(photos|submissions|events)$/.exec(u.pathname);
       if (!m) return send(404, { message: "not found" });
       var table = state[m[1]];
 
-      /* 通用行过滤：eq.X / in.(a,b,c) / gte.X（searchParams 已百分号解码） */
+      /* 通用行过滤：eq.X / in.(a,b,c) / gte.X / is.null（searchParams 已百分号解码） */
       function matches(row) {
         var ok = true;
         u.searchParams.forEach(function (v, k) {
@@ -163,7 +165,9 @@ function startMockSupabase() {
           var mi = /^in\.\(([\s\S]*)\)$/.exec(v);
           if (mi) { if (mi[1].split(",").indexOf(String(row[k])) === -1) ok = false; return; }
           var mg = /^gte\.([\s\S]*)$/.exec(v);
-          if (mg) { if (String(row[k] || "") < mg[1]) ok = false; }
+          if (mg) { if (String(row[k] || "") < mg[1]) ok = false; return; }
+          /* is.null：v2.7.0 招新报名排除活动报名 */
+          if (v === "is.null") { if (row[k] != null) ok = false; return; }
           /* ilike.*关键词*：PostgREST 的包含匹配，报名查询的兜底一次用 */
           var ml = /^ilike\.([\s\S]*)$/.exec(v);
           if (ml) {
@@ -219,7 +223,8 @@ function startMockSupabase() {
           return send(400, { code: "PGRST204", message: "Could not find the 'exif' column of 'photos' in the schema cache" });
         }
         var row = parsed;
-        row.id = m[1] === "photos" ? state.nextPhoto++ : state.nextSub++;
+        if (m[1] === "events" && row.status === undefined) row.status = "draft"; /* 模拟 DB default */
+        row.id = m[1] === "photos" ? state.nextPhoto++ : m[1] === "events" ? state.nextEvent++ : state.nextSub++;
         row.created_at = new Date().toISOString();
         table.push(row);
         return send(201, [row]);
@@ -267,7 +272,9 @@ function startApiServer() {
     "/api/upload": require(path.join(ROOT, "api/upload.js")),
     "/api/backup": require(path.join(ROOT, "api/backup.js")),
     "/api/replace": require(path.join(ROOT, "api/replace.js")),
-    "/api/static-works": require(path.join(ROOT, "api/static-works.js"))
+    "/api/static-works": require(path.join(ROOT, "api/static-works.js")),
+    "/api/events": require(path.join(ROOT, "api/events.js")),
+    "/api/event-register": require(path.join(ROOT, "api/event-register.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -1085,6 +1092,76 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: ["9002"], op: "trash" });
   ok("批量 trash → 软删除不删行", r.status === 200 && r.json.done === 1 && mock.state.photos.some(function (p) { return p.id === 9002 && p.status === "trash"; }));
 
+
+  /* ---------- v2.7.0：活动系统 ---------- */
+  r = await call(P, "GET", "/api/events");
+  ok("活动系统初装 → 空列表（表未建/无活动降级）", r.status === 200 && r.json.ok && r.json.current.length === 0 && r.json.past.length === 0, JSON.stringify(r.json));
+
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_save", title: "秋季外拍 · 柳江日落", content: "周六下午柳江边集合\n带好相机和水", activity_date: "2026-11-15" });
+  ok("event_save 创建草稿 → 返回 id", r.status === 200 && r.json.ok && r.json.id, JSON.stringify(r.json));
+  var evId = String(r.json.id);
+  r = await call(P, "GET", "/api/events");
+  ok("草稿不出现在公开列表", r.json.current.length === 0 && r.json.past.length === 0, JSON.stringify(r.json));
+  r = await call(P, "GET", "/api/events?id=" + evId);
+  ok("草稿详情公开 404", r.status === 404);
+
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_publish", id: evId });
+  ok("event_publish → 200", r.status === 200 && r.json.ok);
+  r = await call(P, "GET", "/api/events");
+  ok("发布后出现在公开列表 current", r.json.current.length === 1 && r.json.current[0].title === "秋季外拍 · 柳江日落", JSON.stringify(r.json.current));
+  r = await call(P, "GET", "/api/events?id=" + evId);
+  ok("发布后详情可访问且正文完整", r.status === 200 && r.json.event.status === "published" && /柳江边集合/.test(r.json.event.content), JSON.stringify(r.json.event).slice(0, 120));
+
+  /* 活动报名 */
+  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小明", "class": "高一2班", contact: "QQ 777", intro: "想去" });
+  ok("活动报名 → 成功", r.status === 200 && r.json.ok && !r.json.duplicate, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小明", contact: "QQ 777" });
+  ok("同联系方式重复报名 → duplicate 提示", r.status === 200 && r.json.ok && r.json.duplicate === true, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小红", contact: "QQ 778" });
+  ok("第二人报名成功", r.status === 200 && r.json.ok);
+  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "", contact: "QQ 779" });
+  ok("缺姓名 → 400", r.status === 400);
+  r = await call(P, "POST", "/api/event-register", { eventId: "99999", name: "小刚", contact: "QQ 780" });
+  ok("不存在活动 → 404", r.status === 404);
+
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_regs", id: evId });
+  ok("event_regs → 2 条报名", r.status === 200 && r.json.submissions.length === 2, JSON.stringify(r.json).slice(0, 120));
+
+  /* 招新报名与活动报名分离 */
+  r = await call(P, "POST", "/api/register", { name: "招新同学", "class": "高一9班", contact: "QQ 555", interest: "人像", intro: "想加入" });
+  ok("招新报名仍正常", r.status === 200 && r.json.ok);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "list" });
+  ok("后台报名列表只含招新（活动报名 2 条已排除，共 5 条且无 event_id）", r.json.submissions.length === 5 && !r.json.submissions.some(function (x) { return x.event_id; }), JSON.stringify(r.json.submissions.map(function (x) { return x.name + (x.event_id ? "(ev)" : ""); })));
+  ok("后台 list 带活动段且含 1 个进行中", Array.isArray(r.json.events) && r.json.events.length === 1 && r.json.events[0].status === "published");
+
+  /* 活动投稿挂靠 */
+  var evQs = "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("活动作品") + "&eventId=" + evId;
+  r = await callRaw(P, "POST", evQs, fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("活动投稿 → 入库带 event_id", r.status === 200 && mock.state.photos.some(function (p) { return p.title === "活动作品" && p.event_id === Number(evId); }), JSON.stringify(r.json).slice(0, 120));
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("坏活动") + "&eventId=99999", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("投稿挂不存在活动 → 400", r.status === 400);
+
+  /* 归档：报名关闭、投稿拒绝、详情保留 */
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_archive", id: evId });
+  ok("event_archive → 200", r.status === 200 && r.json.ok);
+  r = await call(P, "GET", "/api/events");
+  ok("归档后移入 past 列表", r.json.current.length === 0 && r.json.past.length === 1, JSON.stringify(r.json));
+  rl._buckets.clear(); /* 前面报名用例耗尽了单 IP 配额 */
+  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小刚", contact: "QQ 780" });
+  ok("归档后报名 → 拒绝", r.status === 400, JSON.stringify(r.json));
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("晚了") + "&eventId=" + evId, fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("归档后投稿挂靠 → 拒绝", r.status === 400);
+  r = await call(P, "GET", "/api/events?id=" + evId);
+  ok("归档活动详情仍可访问（回顾页）且作品在", r.status === 200 && r.json.event.status === "archived");
+
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: evId });
+  ok("已发布活动不可删除 → 400", r.status === 400);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_save", title: "纯草稿" });
+  var draftId = String(r.json.id);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: draftId });
+  ok("草稿可删除", r.status === 200 && r.json.ok);
+  r = await call(P, "POST", "/api/admin", { password: "wrong", action: "event_save", title: "x" });
+  ok("活动写操作需密码 → 401", r.status === 401);
   globalThis.fetch = realFetch;
   api.server.close();
   mock.server.close();

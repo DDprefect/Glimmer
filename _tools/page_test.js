@@ -219,6 +219,9 @@ async function testIndex() {
       if (url === "api/photos") {
         return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS }); } });
       }
+      if (url === "api/events") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, current: [{ id: 5, title: "秋季外拍", activity_date: "2026-11-15", status: "published", excerpt: "柳江边集合" }], past: [{ id: 3, title: "夏季月赛", activity_date: "2026-08-01", status: "archived", excerpt: "校园人像主题" }] }); } });
+      }
       return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
     };
   });
@@ -236,6 +239,13 @@ async function testIndex() {
   dom.window.Glimmer.setStaticExcluded(["hanlou-06"]);
   await new Promise(function (r) { setTimeout(r, 40); });
   ok("首页精选区不再包含被移除的老作品", !d.querySelector('#pick-campus .work[data-id="hanlou-06"]'), d.querySelectorAll("#pick-campus .work").length + " 张");
+
+  /* v2.7.0：首页活动区块（进行中 + 往期回顾） */
+  await new Promise(function (r) { setTimeout(r, 60); });
+  var evSec = d.getElementById("events-sec");
+  ok("首页活动区块显示（1 进行中 + 1 往期）", evSec && !evSec.hidden && d.querySelectorAll("#events-grid .event-card").length === 2, (evSec ? (evSec.hidden ? "hidden" : "shown") : "no sec") + ", " + d.querySelectorAll("#events-grid .event-card").length + " 张, innerHTML=" + d.getElementById("events-grid").innerHTML.slice(0, 80));
+  ok("活动卡链接到活动页且带 id", !!d.querySelector('#events-grid .event-card[href="event.html?id=5"]'));
+  ok("往期活动标注「已结束 · 回顾」", /已结束/.test((d.querySelectorAll("#events-grid .event-card .event-card__end")[1] || {}).textContent || ""));
 
   /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
   var fontLink = d.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]');
@@ -383,6 +393,9 @@ async function testAdmin() {
       var b = opts && opts.body ? JSON.parse(opts.body) : null;
       lastBody = b;
       callLog.push(b);
+      if (b && b.action === "event_regs") {
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, submissions: [{ id: 31, name: "报名人", "class": "高一1班", contact: "QQ 1", intro: "冲", handled: false, created_at: "2026-11-02T00:00:00Z" }] }); } });
+      }
       /* v2.6.0：后台加载静态老作品清单（公开只读接口） */
       if (String(url).indexOf("api/static-works") !== -1) {
         return Promise.resolve({ ok: true, status: 200, json: function () {
@@ -415,6 +428,7 @@ async function testAdmin() {
             approved: [{ id: 8, category: "城市与远方", title: "已发作品", author: "同学乙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/城市与远方/8.jpg", status: "approved", created_at: "2026-02-01T00:00:00Z" }],
             offline: [{ id: 9, category: "人像与视觉", title: "下架作品", author: "同学丙", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/人像与视觉/9.jpg", status: "offline", created_at: "2026-01-31T00:00:00Z" }],
             trash: [{ id: 10, category: "校园纪实", title: "回收站作品", author: "同学丁", shot_date: null, file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校园纪实/10.jpg", status: "trash", created_at: "2026-01-30T00:00:00Z" }],
+            events: [{ id: 21, title: "秋季外拍", content: "柳江边集合", activity_date: "2026-11-15", status: "published", created_at: "2026-11-01T00:00:00Z" }],
             submissions: [{ id: 1, name: "报名人", class: "高一1班", contact: "QQ 1", interest: "人像", intro: "嗨", handled: false, created_at: "2026-02-01T00:00:00Z" }]
           });
         }
@@ -547,6 +561,18 @@ async function testAdmin() {
   d.querySelector('#trash-list button[data-act="restore_trash"]').click();
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("点恢复 → 请求 restore_trash", callLog.some(function (b) { return b && b.action === "restore_trash" && String(b.id) === "10"; }), JSON.stringify(callLog));
+
+  /* v2.7.0：活动标签页——列表、状态徽标、发布/归档按钮 */
+  var eventsTab = d.querySelector('.admin-tab[data-tab="events"]');
+  eventsTab.click();
+  ok("活动标签可打开且列出活动", d.getElementById("pane-events").classList.contains("is-on") && /秋季外拍/.test(d.getElementById("events-list").textContent));
+  ok("进行中活动带归档按钮与报名入口", !!d.querySelector('#events-list button[data-eact="archive"]') && !!d.querySelector('#events-list button[data-eact="regs"]'));
+  callLog.length = 0;
+  d.querySelector('#events-list button[data-eact="regs"]').click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("点查看报名 → 请求 event_regs", callLog.some(function (b) { return b && b.action === "event_regs" && String(b.id) === "21"; }), JSON.stringify(callLog));
+  ok("报名表格渲染（1 人）", /报名人/.test(d.getElementById("event-regs-table").textContent), d.getElementById("event-regs-table").textContent.slice(0, 60));
+  ok("活动报名导出按钮存在", !!d.getElementById("event-regs-export"));
 
   /* v2.6.0：老作品标签页——清单状态、筛选、移入回收站 */
   var staticTab = d.querySelector('.admin-tab[data-tab="static"]');
@@ -743,11 +769,59 @@ async function testCommons() {
 }
 
 /* ======================================================================== */
+/* ======================================================================== */
+async function testEventPage() {
+  console.log("\n[event] 活动页（v2.7.0）");
+  var dom = await loadPage("event.html?id=5", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      if (url === "api/events?id=5") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, event: { id: 5, title: "秋季外拍", content: "柳江边集合\n带好相机", activity_date: "2026-11-15", status: "published" }, works: [{ id: 71, category: "校外采风", title: "活动作品", author: "小周", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校外采风/71.jpg", created_at: "2026-11-02T00:00:00Z" }] }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true }); } });
+    };
+  });
+  await new Promise(function (r) { setTimeout(r, 60); });
+  var d = dom.window.document;
+  ok("活动页渲染标题与正文（换行保留）", d.getElementById("ev-title").textContent === "秋季外拍" && /柳江边集合/.test(d.getElementById("ev-content").textContent));
+  ok("published 活动显示报名表单", !d.getElementById("ev-form").hidden);
+  ok("活动作品用统一卡片渲染", d.querySelectorAll("#ev-works .work").length === 1, d.querySelectorAll("#ev-works .work").length + " 张");
+  /* 报名提交 */
+  d.getElementById("ev-name").value = "小明";
+  d.getElementById("ev-contact").value = "QQ 777";
+  var posted = null;
+  dom.window.fetch = function (url, opts) {
+    if (url === "api/event-register") { posted = JSON.parse(opts.body); return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, message: "报名成功！" }); } }); }
+    return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true }); } });
+  };
+  d.getElementById("ev-submit").click();
+  await new Promise(function (r) { setTimeout(r, 60); });
+  ok("报名提交带 eventId 与字段", posted && posted.eventId === "5" && posted.name === "小明" && posted.contact === "QQ 777", JSON.stringify(posted));
+  ok("报名成功提示", /报名成功/.test(d.getElementById("ev-msg").textContent));
+  dom.window.close();
+
+  /* 归档回顾态 */
+  var dom2 = await loadPage("event.html?id=3", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      if (url === "api/events?id=3") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, event: { id: 3, title: "夏季月赛", content: "已结束", activity_date: "2026-08-01", status: "archived" }, works: [] }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true }); } });
+    };
+  });
+  await new Promise(function (r) { setTimeout(r, 60); });
+  var d2 = dom2.window.document;
+  ok("归档活动：报名表单隐藏、回顾提示显示", d2.getElementById("ev-form").hidden && !d2.getElementById("ev-closed").hidden);
+  dom2.window.close();
+}
+
 (async function () {
   await testIndex();
   await testGallery();
   await testJoin();
   await testUpload();
+  await testEventPage();
   await testAdmin();
   await testCommons();
   console.log("\n=========================================");

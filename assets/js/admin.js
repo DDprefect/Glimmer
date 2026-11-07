@@ -23,10 +23,13 @@
   var loginMsg = $("#login-msg");
   var panelMsg = $("#panel-msg");
 
-  var data = { pending: [], approved: [], offline: [], trash: [], submissions: [] };
+  var data = { pending: [], approved: [], offline: [], trash: [], submissions: [], events: [], eventsMissing: false };
   var staticWorks = { hidden: [], purged: [], shown: [], excluded: [] };
   var subsFilter = "all";
   var staticFilter = "all";
+  /* v2.7.0：活动编辑状态与当前查看的报名 */
+  var eventEditId = null;
+  var eventRegs = null; /* { id, title, list } */
 
   /* v2.5.0：后台操作反馈改成右下角浮动 toast——成功绿色、失败红色，
      比原来顶上那一行小字醒目得多；3.5 秒后自动淡出。 */
@@ -86,11 +89,11 @@
            " " + p(d.getHours()) + ":" + p(d.getMinutes());
   }
 
-  function downloadCsv(action, filename) {
+  function downloadCsv(action, filename, extra) {
     return fetch("api/admin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password, action: action })
+      body: JSON.stringify(Object.assign({ password: password, action: action }, extra || {}))
     }).then(function (r) {
       if (r.status === 401) throw new Error("unauthorized");
       if (!r.ok) throw new Error("导出失败（HTTP " + r.status + "）");
@@ -117,11 +120,18 @@
     var exifPart = exif
       ? " · " + [exif.camera, exif.aperture, exif.shutter, exif.iso].filter(Boolean).map(esc).join(" ")
       : "";
+    /* v2.7.0：活动投稿标注所属活动名（list 里带 events，直接匹配） */
+    var evPart = "";
+    if (p.event_id) {
+      var ev = (data.events || []).filter(function (e) { return String(e.id) === String(p.event_id); })[0];
+      evPart = ' · <span class="admin-item__feat">活动：' + esc(ev ? ev.title : "#" + p.event_id) + "</span>";
+    }
     /* v2.2.0：精选角标 + 拒绝理由回显 */
     return esc(p.category) +
       (p.author ? " · " + esc(p.author) : "") +
       (p.shot_date ? " · 摄于 " + esc(p.shot_date) : "") +
       exifPart +
+      evPart +
       " · " + fmtTime(p.created_at) +
       (p.featured ? ' · <span class="admin-item__feat">⭐精选</span>' : "") +
       (p.reject_reason ? " · 理由：" + esc(p.reject_reason) : "");
@@ -325,8 +335,87 @@
     }
 
     renderStatic();
+    renderEvents();
     renderSubs();
     updateBatchCount();
+  }
+
+  /* ---------------- 活动管理（v2.7.0） ---------------- */
+  var EVENT_ST = { draft: "草稿", published: "进行中", archived: "已归档" };
+
+  function eventCard(e) {
+    var ops = "";
+    if (e.status === "draft") {
+      ops = '<button class="admin-op admin-op--ok" type="button" data-eact="publish" data-id="' + e.id + '">发布</button>' +
+            '<button class="admin-op" type="button" data-eact="edit" data-id="' + e.id + '">编辑</button>' +
+            '<button class="admin-op admin-op--del" type="button" data-eact="delete" data-id="' + e.id + '">删除</button>';
+    } else if (e.status === "published") {
+      ops = '<button class="admin-op" type="button" data-eact="regs" data-id="' + e.id + '">查看报名</button>' +
+            '<button class="admin-op" type="button" data-eact="edit" data-id="' + e.id + '">编辑</button>' +
+            '<button class="admin-op admin-op--del" type="button" data-eact="archive" data-id="' + e.id + '">归档（结束活动）</button>';
+    } else {
+      ops = '<button class="admin-op" type="button" data-eact="regs" data-id="' + e.id + '">查看报名</button>' +
+            '<button class="admin-op admin-op--ok" type="button" data-eact="publish" data-id="' + e.id + '">重新发布</button>';
+    }
+    var st = EVENT_ST[e.status] || e.status;
+    var excerpt = String(e.content || "").slice(0, 60);
+    return '<article class="admin-event" data-id="' + esc(e.id) + '">' +
+      '<div class="admin-event__meta">' +
+        '<h3>' + esc(e.title) + ' <span class="admin-event__st is-' + e.status + '">' + st + "</span></h3>" +
+        "<p>" + (e.activity_date ? "活动日期 " + esc(e.activity_date) + " · " : "") + esc(excerpt) + (String(e.content || "").length > 60 ? "…" : "") + "</p>" +
+      "</div>" +
+      '<div class="admin-item__ops">' + ops + "</div>" +
+    "</article>";
+  }
+
+  function renderEvents() {
+    var t = $("#tab-events");
+    if (t) t.textContent = data.events.filter(function (e) { return e.status === "published"; }).length;
+    var miss = $("#events-missing");
+    if (miss) miss.style.display = data.eventsMissing ? "" : "none";
+    var host = $("#events-list");
+    if (host) {
+      host.innerHTML = data.events.length
+        ? data.events.map(eventCard).join("")
+        : '<p class="admin-empty">还没有活动。点右上角「＋ 新建活动」创建第一个：填标题、日期和介绍，保存后点「发布」就会出现在官网首页。</p>';
+    }
+    if (eventRegs) renderEventRegs();
+  }
+
+  function renderEventRegs() {
+    var wrap = $("#event-regs-wrap");
+    if (!wrap || !eventRegs) return;
+    wrap.hidden = false;
+    $("#event-regs-title").textContent = "报名 · " + eventRegs.title;
+    $("#event-regs-n").textContent = "共 " + eventRegs.list.length + " 人报名";
+    var html = eventRegs.list.map(function (s) {
+      var hCls = s.handled ? "admin-handled is-yes" : "admin-handled is-no";
+      var hTxt = s.handled ? "已联系 ✓" : "未联系";
+      return "<tr>" +
+        "<td>" + esc(s.name) + "</td>" +
+        "<td>" + esc(s["class"] || "—") + "</td>" +
+        "<td>" + esc(s.contact) + "</td>" +
+        '<td class="admin-table__intro">' + esc(s.intro || "—") + "</td>" +
+        '<td><button class="' + hCls + '" type="button" data-eact="toggle" data-id="' + s.id + '" data-h="' + (s.handled ? "1" : "0") + '">' + hTxt + "</button></td>" +
+        "<td>" + fmtTime(s.created_at) + "</td>" +
+      "</tr>";
+    }).join("");
+    $("#event-regs-table").innerHTML =
+      '<table class="admin-table"><thead><tr>' +
+      "<th>姓名</th><th>年级班级</th><th>联系方式</th><th>想说的话</th><th>状态</th><th>报名时间</th>" +
+      "</tr></thead><tbody>" +
+      (html || '<tr><td colspan="6" class="admin-empty">还没有人报名。</td></tr>') +
+      "</tbody></table>";
+  }
+
+  function loadEventRegs(id) {
+    api("event_regs", { id: id }).then(function (j) {
+      var ev = data.events.filter(function (e) { return String(e.id) === String(id); })[0];
+      eventRegs = { id: id, title: ev ? ev.title : "活动 #" + id, list: j.submissions || [] };
+      renderEventRegs();
+      var wrap = $("#event-regs-wrap");
+      if (wrap) wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+    }).catch(errHandler);
   }
 
   function renderSubs() {
@@ -378,6 +467,8 @@
       data.offline = j.offline || [];
       data.trash = j.trash || [];
       data.submissions = j.submissions || [];
+      data.events = j.events || [];
+      data.eventsMissing = !!j.eventsMissing;
       if (sw && sw.ok) {
         staticWorks.hidden = sw.hidden || [];
         staticWorks.purged = sw.purged || [];
@@ -794,6 +885,102 @@
         return load();
       }).catch(errHandler).then(function () { btn.disabled = false; });
     });
+  });
+
+  /* ---------------- 事件：活动管理（v2.7.0） ---------------- */
+  $("#event-new").addEventListener("click", function () {
+    eventEditId = null;
+    var f = $("#event-form");
+    f.hidden = false;
+    $("#event-title").value = "";
+    $("#event-date").value = "";
+    $("#event-content").value = "";
+    $("#event-save-btn").textContent = "保存（保存后点「发布」上线）";
+    $("#event-title").focus();
+  });
+
+  $("#event-cancel").addEventListener("click", function () {
+    eventEditId = null;
+    $("#event-form").hidden = true;
+  });
+
+  $("#event-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var title = $("#event-title").value.trim();
+    if (!title) { toast("请填写活动标题", "is-err"); return; }
+    var payload = { title: title, content: $("#event-content").value, activity_date: $("#event-date").value };
+    var btn = $("#event-save-btn");
+    btn.disabled = true;
+    if (eventEditId) payload.id = eventEditId;
+    api("event_save", payload).then(function (j) {
+      eventEditId = null;
+      $("#event-form").hidden = true;
+      toast("活动已保存。草稿点「发布」后才会出现在官网。", "is-ok");
+      return load();
+    }).catch(errHandler).then(function () { btn.disabled = false; });
+  });
+
+  $("#events-list").addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest("button[data-eact]") : null;
+    if (!btn) return;
+    var act = btn.getAttribute("data-eact");
+    var id = btn.getAttribute("data-id");
+
+    if (act === "publish" || act === "archive") {
+      if (act === "archive" && !window.confirm("归档后：官网首页不再显示、投稿页的活动入口消失、报名关闭。活动页保留为「已结束」回顾，报名名单与作品记录全部保留。确定归档？")) return;
+      btn.disabled = true;
+      api(act === "publish" ? "event_publish" : "event_archive", { id: id }).then(function () {
+        toast(act === "publish" ? "活动已发布，官网首页已出现。" : "活动已归档，官网入口已收起，记录全部保留。", "is-ok");
+        return load();
+      }).catch(errHandler).then(function () { btn.disabled = false; });
+      return;
+    }
+    if (act === "delete") {
+      if (!window.confirm("删除草稿活动？此操作不可恢复。")) return;
+      btn.disabled = true;
+      api("event_delete", { id: id }).then(function () { toast("草稿已删除。", "is-ok"); return load(); })
+        .catch(errHandler).then(function () { btn.disabled = false; });
+      return;
+    }
+    if (act === "edit") {
+      var ev = data.events.filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!ev) return;
+      eventEditId = id;
+      var f = $("#event-form");
+      f.hidden = false;
+      $("#event-title").value = ev.title || "";
+      $("#event-date").value = ev.activity_date || "";
+      $("#event-content").value = ev.content || "";
+      $("#event-save-btn").textContent = "保存修改";
+      $("#event-title").focus();
+      return;
+    }
+    if (act === "regs") {
+      loadEventRegs(id);
+      return;
+    }
+  });
+
+  /* 活动报名表格里的「已联系」切换（在 #event-regs-wrap 内，单独委托） */
+  $("#event-regs-table").addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest('button[data-eact="toggle"]') : null;
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    var handled = btn.getAttribute("data-h") !== "1";
+    btn.disabled = true;
+    api("mark_handled", { id: id, handled: handled })
+      .then(function () { if (eventRegs) return loadEventRegs(eventRegs.id); })
+      .catch(errHandler)
+      .then(function () { btn.disabled = false; });
+  });
+
+  $("#event-regs-export").addEventListener("click", function () {
+    if (!eventRegs) return;
+    var btn = this;
+    btn.disabled = true;
+    downloadCsv("export_event", "glimmer-event-" + eventRegs.id + "-regs.csv", { id: eventRegs.id })
+      .catch(errHandler)
+      .then(function () { btn.disabled = false; });
   });
 
   /* ---------------- 事件：报名已联系切换 ---------------- */

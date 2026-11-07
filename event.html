@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>社团活动 · 柳铁一中微光摄影社</title>
+<meta name="description" content="微光摄影社活动：查看活动介绍、在线报名、翻看往期活动作品。活动由干部发布，报名免费。">
+<meta name="theme-color" content="#F7F2E9">
+<meta name="robots" content="noindex">
+<link rel="canonical" href="https://ltyzglimmer.top/event.html">
+<meta property="og:site_name" content="柳铁一中微光摄影社">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:url" content="https://ltyzglimmer.top/event.html">
+<meta property="og:title" content="社团活动 · 柳铁一中微光摄影社">
+<meta property="og:description" content="查看活动介绍、在线报名、翻看活动作品。">
+<meta property="og:image" content="https://ltyzglimmer.top/assets/img/brand/og-cover.jpg">
+<link rel="icon" href="assets/img/brand/mark.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;900&family=Inter:wght@400;500;600&display=swap" media="print">
+<link rel="stylesheet" href="assets/css/main.css">
+</head>
+
+<body>
+<div data-nav></div>
+
+<header class="page-head wrap">
+  <span class="eyebrow eyebrow--red" data-reveal>Event　社团活动</span>
+  <h1 class="page-head__title" id="ev-title" data-reveal>加载中…</h1>
+</header>
+
+<section class="section" style="padding-top:24px">
+  <div class="wrap" style="max-width:880px">
+    <p class="event-hero__date" id="ev-date" hidden></p>
+    <div class="event-body" id="ev-content" hidden></div>
+
+    <!-- 报名表单（published 才显示；archived 隐藏） -->
+    <form class="event-form" id="ev-form" hidden>
+      <h2 class="h3">报名参加</h2>
+      <p style="font-size:.86rem;opacity:.7;margin:0">免费参加。填完提交，干部会通过你留的联系方式联系你。</p>
+      <div class="row2">
+        <div class="field">
+          <label for="ev-name">姓名 / 昵称 *</label>
+          <input id="ev-name" type="text" maxlength="30" placeholder="怎么称呼你" required>
+        </div>
+        <div class="field">
+          <label for="ev-class">年级班级</label>
+          <input id="ev-class" type="text" maxlength="30" placeholder="如：高一3班（可留空）">
+        </div>
+      </div>
+      <div class="field">
+        <label for="ev-contact">联系方式 *</label>
+        <input id="ev-contact" type="text" maxlength="60" placeholder="QQ 号或手机号">
+      </div>
+      <div class="field">
+        <label for="ev-intro">想说的话</label>
+        <textarea id="ev-intro" rows="3" maxlength="500" placeholder="想拍什么、有什么器材、任何想说的（可留空）"></textarea>
+      </div>
+      <input type="text" id="ev-hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;height:0;overflow:hidden">
+      <button class="btn" type="submit" id="ev-submit">提交报名</button>
+      <p class="up-msg" id="ev-msg" hidden role="status"></p>
+    </form>
+
+    <div class="event-form" id="ev-closed" hidden>
+      <h2 class="h3">本活动已结束</h2>
+      <p style="font-size:.9rem;opacity:.7;margin:0">报名通道已关闭。下方是这次活动里同学们的作品，欢迎翻看；新活动发布后会出现在官网首页。</p>
+    </div>
+
+    <div class="event-works" id="ev-works-sec" hidden>
+      <h2>活动作品</h2>
+      <div class="works" id="ev-works"></div>
+    </div>
+
+    <p class="admin-empty" id="ev-error" hidden>活动不存在或已删除。回 <a href="index.html">首页</a> 看看正在进行的其他活动。</p>
+  </div>
+</section>
+
+<div data-foot></div>
+
+<script src="assets/js/site.js"></script>
+<script src="assets/js/event.js"></script>
+</body>
+</html>

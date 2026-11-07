@@ -2722,3 +2722,41 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
   border-left: 3px solid var(--gold, #BF8B34);
   background: rgba(191, 139, 52, .08); border-radius: 0 8px 8px 0;
 }
+
+/* ===== v2.7.0：活动系统 ===== */
+.admin-event { display: flex; align-items: center; gap: 16px; justify-content: space-between; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 14px 16px; margin-bottom: 12px; }
+.admin-event__meta { flex: 1 1 320px; min-width: 0; }
+.admin-event__meta h3 { font-size: .98rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.admin-event__meta p { font-size: .82rem; opacity: .68; margin-top: 4px; }
+.admin-event__st { font-size: .7rem; padding: 2px 9px; border-radius: 999px; background: var(--line); }
+.admin-event__st.is-published { background: var(--red); color: #fff; }
+.admin-event__st.is-draft { background: var(--gold); color: #fff; }
+.admin-event-form { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 16px; margin-bottom: 18px; display: grid; gap: 10px; }
+.admin-event-form[hidden] { display: none; }
+.admin-event__content { font: inherit; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--ink); resize: vertical; line-height: 1.7; }
+
+/* 首页活动区块 */
+.events-sec { padding: clamp(40px, 7vw, 72px) 0; }
+.events-grid { display: grid; gap: 18px; margin-top: 28px; }
+.event-card { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+  border: 1px solid var(--line); border-left: 4px solid var(--red); border-radius: var(--r-lg);
+  background: var(--card); padding: 20px 22px; }
+.event-card__date { font-family: var(--serif); font-size: 1.4rem; color: var(--red); text-align: center; line-height: 1.2; min-width: 64px; }
+.event-card__date small { display: block; font-family: var(--mono); font-size: .68rem; letter-spacing: .12em; color: var(--ink-3); margin-top: 4px; }
+.event-card__body h3 { font-family: var(--serif); font-size: clamp(1.1rem, 2vw, 1.35rem); }
+.event-card__body p { font-size: .88rem; opacity: .72; margin-top: 6px; line-height: 1.7; }
+.event-card__end { font-size: .72rem; padding: 4px 12px; border-radius: 999px; background: var(--line); align-self: start; }
+.events-empty { text-align: center; opacity: 0; height: 0; }
+@media (max-width: 640px) { .event-card { grid-template-columns: 1fr; gap: 10px; } .event-card__date { text-align: left; } }
+
+/* 活动页 */
+.event-hero__date { font-family: var(--mono); font-size: .78rem; letter-spacing: .14em; color: var(--red); }
+.event-hero__ended { display: inline-block; font-size: .74rem; padding: 4px 14px; border-radius: 999px; background: var(--line); margin-left: 10px; vertical-align: middle; }
+.event-body { font-size: 1rem; line-height: 2; margin: 26px 0 34px; white-space: pre-line; }
+.event-form { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--card); padding: 22px; display: grid; gap: 12px; margin-bottom: 40px; }
+.event-form[hidden] { display: none; }
+.event-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .event-form .row2 { grid-template-columns: 1fr; } }
+.event-works { margin-top: 40px; }
+.event-works h2 { font-family: var(--serif); font-size: 1.2rem; margin-bottom: 18px; }

@@ -85,6 +85,15 @@
           </select>
         </div>
 
+        <!-- v2.7.0：活动参与入口——活动期间显示，归档后自动消失 -->
+        <div class="field" id="f-event-wrap" hidden>
+          <label for="f-event">参与活动 <span style="color:var(--gold)">（可选）</span></label>
+          <select id="f-event" name="eventId">
+            <option value="">不参与活动，仅投稿作品集</option>
+          </select>
+          <p style="font-size:.78rem;opacity:.65;margin:6px 0 0" id="f-event-hint">选了活动，这张照片审核通过后也会出现在该活动的作品页。</p>
+        </div>
+
         <div class="field--row">
           <div class="field">
             <label for="f-title">作品标题 <span style="color:var(--red)">*</span></label>

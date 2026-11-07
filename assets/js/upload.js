@@ -169,11 +169,14 @@
         var exifP = EXIF && file ? EXIF.read(file) : Promise.resolve(null);
         return exifP.then(function (exif) {
           var date = $("#f-date").value || (exif && exif.shotAt) || "";
+          var evSel = $("#f-event");
           var qs = "api/upload?category=" + encodeURIComponent(category) +
             "&title=" + encodeURIComponent(title) +
             "&author=" + encodeURIComponent(author) +
             (date ? "&shot_date=" + encodeURIComponent(date) : "") +
-            (exif ? "&exif=" + encodeURIComponent(JSON.stringify(exif)) : "");
+            (exif ? "&exif=" + encodeURIComponent(JSON.stringify(exif)) : "") +
+            /* v2.7.0：活动挂靠（选了才带） */
+            (evSel && evSel.value ? "&eventId=" + encodeURIComponent(evSel.value) : "");
           return fetch(qs, {
             method: "POST",
             headers: { "Content-Type": "application/octet-stream" },
@@ -285,4 +288,30 @@
         .then(function () { qBtn.disabled = false; });
     });
   }
+
+  /* ---------------- 活动参与入口（v2.7.0） ----------------
+     活动期间：分类栏下方出现「参与活动」下拉；归档/无活动时整块消失。
+     选中的活动随投稿提交（eventId），照片审核通过后会同时出现在该活动页。 */
+  function loadEvents() {
+    var wrap = $("#f-event-wrap");
+    var sel = $("#f-event");
+    if (!wrap || !sel) return;
+    fetch("api/events")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var current = (j && j.ok && j.current) || [];
+        if (!current.length) { wrap.hidden = true; return; }
+        current.forEach(function (e) {
+          var opt = document.createElement("option");
+          opt.value = e.id;
+          opt.textContent = e.title + (e.activity_date ? "（" + e.activity_date + "）" : "");
+          sel.appendChild(opt);
+        });
+        wrap.hidden = false;
+        var hint = $("#f-event-hint");
+        if (hint) hint.textContent = "正在参与：" + current.map(function (e) { return e.title; }).join("、");
+      })
+      .catch(function () { wrap.hidden = true; /* 接口挂了就当没有活动，不挡投稿 */ });
+  }
+  loadEvents();
 })();
