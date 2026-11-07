@@ -44,6 +44,12 @@
     });
     sec.hidden = false;
     host.innerHTML = items.map(function (w, i) { return G.workCard(w, i, 0); }).join("");
+    /* workCard 自带 data-reveal（滚动入场），但这里是动态插入、页面的
+       IntersectionObserver 早已初始化完毕，没人再观察它们——结果是
+       卡片永久 opacity:0 却占位可点（v2.7.0 事故）。直接补 is-in 立即显示。 */
+    Array.prototype.forEach.call(host.querySelectorAll("[data-reveal]"), function (el) {
+      el.classList.add("is-in");
+    });
     if (G.bindCards) G.bindCards(host, items);
   }
 

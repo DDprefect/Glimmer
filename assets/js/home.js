@@ -182,7 +182,7 @@
           var dateHtml = d.length === 3
             ? '<div class="event-card__date">' + G.esc(d[1] + "/" + d[2]) + "<small>" + G.esc(d[0]) + "</small></div>"
             : '<div class="event-card__date">活<small>EVENT</small></div>';
-          return '<a class="event-card" href="event.html?id=' + encodeURIComponent(e.id) + '" data-reveal>' +
+          return '<a class="event-card" href="event.html?id=' + encodeURIComponent(e.id) + '">' +
             dateHtml +
             '<div class="event-card__body">' +
               "<h3>" + G.esc(e.title) + "</h3>" +
