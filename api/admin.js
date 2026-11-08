@@ -298,6 +298,10 @@ module.exports = async function (req, res) {
       if (shot_date && !DATE_RE.test(shot_date)) {
         return http.json(req, res, 400, { ok: false, error: "拍摄日期格式应为 YYYY-MM-DD" });
       }
+      /* v2.9.3：拍摄日期永远不能超过今天 */
+      if (shot_date && shot_date > http.todayCN()) {
+        return http.json(req, res, 400, { ok: false, error: "拍摄日期不能晚于今天" });
+      }
       if (shot_date) patch.shot_date = shot_date;
       if (!Object.keys(patch).length) {
         return http.json(req, res, 400, { ok: false, error: "没有要修改的内容" });

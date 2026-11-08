@@ -137,12 +137,19 @@
       (p.reject_reason ? " · 理由：" + esc(p.reject_reason) : "");
   }
 
+  /* 北京时间的今天（与后端 http.todayCN 同款判据） */
+  function todayCN() {
+    try { return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); }
+    catch (e) { return ""; }
+  }
+
   function editForm(p) {
     return '<form class="admin-edit">' +
       '<input class="admin-edit__t" name="title" type="text" maxlength="50" value="' + esc(p.title) + '" placeholder="标题" required>' +
       '<input class="admin-edit__a" name="author" type="text" maxlength="30" value="' + esc(p.author || "") + '" placeholder="署名（可留空）">' +
       '<select class="admin-edit__c" name="category">' + catOptions(p.category) + "</select>" +
-      '<input class="admin-edit__d" name="shot_date" type="date" value="' + esc(p.shot_date || "") + '">' +
+      /* v2.9.3：拍摄日期上限今天（服务端同样拒绝未来日期） */
+      '<input class="admin-edit__d" name="shot_date" type="date" max="' + todayCN() + '" value="' + esc(p.shot_date || "") + '">' +
       '<div class="admin-edit__ops">' +
         '<button class="admin-op admin-op--ok" type="submit">保存</button>' +
         '<button class="admin-op" type="button" data-act="edit-cancel">取消</button>' +

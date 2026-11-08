@@ -208,6 +208,13 @@ function clean(v, maxLen) {
   return s;
 }
 
+/* 北京时间（UTC+8）的今天，YYYY-MM-DD。
+   「拍摄日期不能晚于今天」的统一判据——照片是过去拍的，未来日期一律是
+   填错或伪造；用北京时间记账与 backup.js 的 stampCN 同款，避免 UTC 差 8 小时。 */
+function todayCN() {
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 module.exports = {
   allowOrigin: allowOrigin,
   originAllowedValue: originAllowedValue,
@@ -220,5 +227,6 @@ module.exports = {
   missingEnv: missingEnv,
   originSuspicious: originSuspicious,
   rejectOrigin: rejectOrigin,
-  clean: clean
+  clean: clean,
+  todayCN: todayCN
 };

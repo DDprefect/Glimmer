@@ -104,6 +104,10 @@ module.exports = async function (req, res) {
     if (shot_date && !DATE_RE.test(shot_date)) {
       return http.json(req, res, 400, { ok: false, error: "拍摄日期格式应为 YYYY-MM-DD" });
     }
+    /* v2.9.3：拍摄日期永远不能超过今天（照片是过去拍的；含 EXIF 自动补的日期） */
+    if (shot_date && shot_date > http.todayCN()) {
+      return http.json(req, res, 400, { ok: false, error: "拍摄日期不能晚于今天" });
+    }
 
     /* 活动挂靠校验（v2.7.0）：活动必须存在且进行中；未建表/未填则不挂靠 */
     var eventRef = null;

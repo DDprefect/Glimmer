@@ -1106,6 +1106,15 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "wrong", action: "pills_save", config: {} });
   ok("胶囊写操作需密码 → 401", r.status === 401);
 
+  /* ---------- v2.9.3：拍摄日期永远不能超过今天 ---------- */
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("未来日期投稿") + "&shot_date=2099-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("投稿拍摄日期晚于今天 → 400（含 EXIF 补的日期同判据）", r.status === 400 && /晚于今天/.test(r.json.error || ""), JSON.stringify(r.json));
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("合法日期投稿") + "&shot_date=2026-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("过去的拍摄日期正常入库", r.status === 200, JSON.stringify(r.json).slice(0, 100));
+  var futureId = r.json && r.json.photo ? r.json.photo.id : null;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(futureId), shot_date: "2099-12-31" });
+  ok("后台编辑拍摄日期晚于今天 → 400", r.status === 400 && /晚于今天/.test(r.json.error || ""), JSON.stringify(r.json));
+
   /* ---------- v2.7.0：活动系统 ---------- */
   r = await call(P, "GET", "/api/events");
   ok("活动系统初装 → 空列表（表未建/无活动降级）", r.status === 200 && r.json.ok && r.json.current.length === 0 && r.json.past.length === 0, JSON.stringify(r.json));

@@ -313,5 +313,12 @@
       })
       .catch(function () { wrap.hidden = true; /* 接口挂了就当没有活动，不挡投稿 */ });
   }
+  /* v2.9.3：拍摄日期永远不能超过今天——date 输入框上限设为北京时间的今天，
+     服务端（api/upload.js）同样拒绝未来日期，双保险。 */
+  (function capShotDate() {
+    var el = $("#f-date");
+    if (!el) return;
+    try { el.max = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); } catch (e) {}
+  })();
   loadEvents();
 })();
