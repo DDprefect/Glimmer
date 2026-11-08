@@ -82,6 +82,19 @@
         body.hidden = false;
         body.textContent = ev.content || "（活动介绍待补充）";
 
+        /* v2.8.0：报名汇总——人数随时可见；名单（仅姓名+班级）归档后公开 */
+        var regs = j.regs || {};
+        var regsEl = $("#ev-regs");
+        if (regsEl) {
+          regsEl.hidden = false;
+          var names = (regs.names || []).map(function (r) {
+            return G.esc(r.name) + (r["class"] ? "（" + G.esc(r["class"]) + "）" : "");
+          }).join("、");
+          regsEl.innerHTML =
+            '<span class="tag">已报名 ' + (regs.count || 0) + " 人</span>" +
+            (names ? '<span class="evnames"><b>参与名单：</b>' + names + "</span>" : "");
+        }
+
         if (ev.status === "published") {
           $("#ev-form").hidden = false;
         } else {

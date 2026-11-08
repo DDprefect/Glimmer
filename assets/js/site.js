@@ -234,6 +234,30 @@
       "</a>";
   }
 
+  /* ---------------------------------------------------------- 活动胶囊（v2.8.0）
+     hero 区招新胶囊的同款高亮——进行中的活动以红色脉冲点胶囊直接出现在首屏，
+     点击直达活动页（介绍/报名/作品）。仅首页有 #ebar 容器；无活动时保持隐藏。
+     动态插入无 data-reveal，不踩 v2.7.1 的隐形坑。 */
+  function renderEventPill() {
+    var el = $("#ebar");
+    if (!el || typeof fetch !== "function") return;
+    fetch("api/events")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var current = (j && j.ok && j.current) || [];
+        if (!current.length) return;
+        el.hidden = false;
+        /* 最多放 2 个胶囊防止首屏拥挤，其余在下方「社团活动」区块 */
+        el.innerHTML = current.slice(0, 2).map(function (e) {
+          return '<a class="hero__recruit hero__event" href="event.html?id=' + encodeURIComponent(e.id) + '">' +
+            '<i aria-hidden="true"></i>' + esc("活动报名 · " + (e.title || "").slice(0, 16)) +
+            "<span aria-hidden=\"true\">→</span>" +
+          "</a>";
+        }).join("");
+      })
+      .catch(function () { /* 接口不可用：胶囊不出现，不挡首页 */ });
+  }
+
   /* ---------------------------------------------------------- 复制文本
      双击 index.html 走 file:// 时浏览器不是安全上下文，navigator.clipboard
      可能不存在、也可能存在但 writeText 直接 reject。因此只在安全上下文且
@@ -794,6 +818,7 @@
     curtain();
     renderNav();
     renderRecruit();
+    renderEventPill();
     renderFoot();
     reveals();
     counters();

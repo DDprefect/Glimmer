@@ -2760,3 +2760,24 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 @media (max-width: 560px) { .event-form .row2 { grid-template-columns: 1fr; } }
 .event-works { margin-top: 40px; }
 .event-works h2 { font-family: var(--serif); font-size: 1.2rem; margin-bottom: 18px; }
+
+/* ===== v2.8.0：活动高亮入口 + 作品集活动子视图 ===== */
+/* hero 活动胶囊：招新同款高亮，红色脉冲点区分 */
+.hero__event i { background: var(--red, #B03A22); box-shadow: 0 0 0 0 rgba(176,58,34,.55); animation: recruitPulse 1.6s infinite; }
+/* 作品集筛选栏的活动按钮 */
+.filter--event { position: relative; color: var(--red, #B03A22); border-color: var(--red, #B03A22); }
+.filter--event.is-on { background: var(--red, #B03A22); color: #fff; }
+.filter__dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red, #B03A22); margin-right: 6px; vertical-align: 1px; animation: recruitPulse 1.6s infinite; }
+.filter__dot[hidden] { display: none; }
+
+/* 活动子视图信息头与列表 */
+.evhead { margin: 6px 0 26px; }
+.evhead__tip { font-size: .88rem; opacity: .72; line-height: 1.8; margin: 8px 0 0; }
+.evback { display: inline-block; font-size: .84rem; opacity: .65; }
+.evback:hover { opacity: 1; }
+.evstats { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+.evnames { display: block; margin-top: 8px; font-size: .84rem; }
+.evnames b { opacity: .6; font-weight: 500; }
+.evlist { display: grid; gap: 14px; }
+.evlist .event-card { display: grid; grid-template-columns: 1fr auto; }
+@media (max-width: 640px) { .evlist .event-card { grid-template-columns: 1fr; } }

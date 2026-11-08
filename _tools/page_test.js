@@ -245,6 +245,7 @@ async function testIndex() {
   var evSec = d.getElementById("events-sec");
   ok("首页活动区块显示（1 进行中 + 1 往期）", evSec && !evSec.hidden && d.querySelectorAll("#events-grid .event-card").length === 2, (evSec ? (evSec.hidden ? "hidden" : "shown") : "no sec") + ", " + d.querySelectorAll("#events-grid .event-card").length + " 张, innerHTML=" + d.getElementById("events-grid").innerHTML.slice(0, 80));
   ok("活动卡链接到活动页且带 id", !!d.querySelector('#events-grid .event-card[href="event.html?id=5"]'));
+  ok("hero 区活动胶囊（招新同款高亮，v2.8.0）", !!d.querySelector("#ebar .hero__event.hero__recruit") && /活动报名/.test(d.getElementById("ebar").textContent), d.getElementById("ebar") ? d.getElementById("ebar").textContent.slice(0, 40) : "no ebar");
   ok("往期活动标注「已结束 · 回顾」", /已结束/.test((d.querySelectorAll("#events-grid .event-card .event-card__end")[1] || {}).textContent || ""));
 
   /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
@@ -816,12 +817,58 @@ async function testEventPage() {
   dom2.window.close();
 }
 
+/* ======================================================================== */
+async function testGalleryEvents() {
+  console.log("\n[gallery-event] 活动子视图与计数（v2.8.0）");
+  var dom = await loadPage("gallery.html?event=5", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      if (url === "api/events?id=5") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, event: { id: 5, title: "秋季外拍", content: "x", activity_date: "2026-11-15", status: "published" }, works: [{ id: 71, category: "校外采风", title: "活动作A", author: "小周", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校外采风/71.jpg", created_at: "2026-11-02T00:00:00Z" }, { id: 72, category: "校外采风", title: "活动作B", author: "小吴", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校外采风/72.jpg", created_at: "2026-11-03T00:00:00Z" }], regs: { count: 3, names: [{ name: "小明", "class": "高一2班" }] } }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, current: [{ id: 5, title: "秋季外拍", status: "published" }], past: [] }); } });
+    };
+  });
+  await new Promise(function (r) { setTimeout(r, 80); });
+  var d = dom.window.document;
+  ok("?event=5 直达活动详情视图", /秋季外拍/.test(d.getElementById("works-grid").textContent));
+  ok("详情视图显示作品数与报名人数", /作品 2 张/.test(d.getElementById("works-grid").textContent) && /参与报名 3 人/.test(d.getElementById("works-grid").textContent), d.getElementById("works-grid").textContent.slice(0, 160));
+  ok("返回作品集链接存在", !!d.querySelector("[data-evback]"));
+  dom.window.close();
+
+  /* 常规视图：活动投稿计入总数但不进网格 */
+  var dom2 = await loadPage("gallery.html", function (window) {
+    baseStubs(window);
+    window.fetch = function (url) {
+      if (url === "api/photos") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: DB_PHOTOS.concat([{ id: 81, category: "校外采风", title: "活动投稿A", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校外采风/81.jpg", event_id: 5, created_at: "2026-11-02T00:00:00Z" }, { id: 82, category: "校外采风", title: "活动投稿B", file_url: "https://glimmer-photos.cos.ap-guangzhou.myqcloud.com/校外采风/82.jpg", event_id: 5, created_at: "2026-11-03T00:00:00Z" }]) }); } });
+      }
+      if (url === "api/events") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, current: [{ id: 5, title: "秋季外拍", status: "published" }], past: [] }); } });
+      }
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
+    };
+  });
+  await new Promise(function (r) { setTimeout(r, 150); });
+  var d2 = dom2.window.document;
+  var cnt = d2.querySelector("[data-count-works]");
+  ok("活动投稿计入本期展出（74+2 静态可见 + DB 2 张常规 = 78）", cnt && cnt.textContent === "78", cnt ? cnt.textContent : "no el");
+  ok("活动投稿不进常规网格", !d2.querySelector('#works-grid .work[data-id="db-81"]'), d2.querySelectorAll("#works-grid .work").length + " 张首屏");
+  ok("活动按钮存在且带进行中脉冲点", !!d2.querySelector(".filter--event") && !d2.querySelector(".filter--event .filter__dot").hidden);
+  d2.querySelector(".filter--event").click();
+  await new Promise(function (r) { setTimeout(r, 60); });
+  ok("点活动按钮 → 列表视图（正在进行组）", /活动拍摄与回顾/.test(d2.getElementById("works-grid").textContent) && /正在进行/.test(d2.getElementById("works-grid").textContent), d2.getElementById("works-grid").textContent.slice(0, 100));
+  ok("列表项链接到子视图 URL", !!d2.querySelector('#works-grid .event-card[href="gallery.html?event=5"]'));
+  dom2.window.close();
+}
+
 (async function () {
   await testIndex();
   await testGallery();
   await testJoin();
   await testUpload();
   await testEventPage();
+  await testGalleryEvents();
   await testAdmin();
   await testCommons();
   console.log("\n=========================================");

@@ -45,6 +45,18 @@ module.exports = async function (req, res) {
       /* draft 未发布：只允许后台（带密码）看，公开详情一律 404 */
       if (ev.status === "draft") return http.json(req, res, 404, { ok: false, error: "活动不存在或已删除" });
       var works = await db.photos.byEvent(id).catch(function () { return []; });
+      /* v2.8.0：报名汇总——参与人数任何人可见；名单（仅姓名+班级，绝不
+         含联系方式/留言）只在活动归档后公开，进行中不公开报名名单。 */
+      var regs = { count: 0, names: [] };
+      try {
+        var regRows = await db.submissions.byEvent(id);
+        regs.count = (regRows || []).length;
+        if (ev.status === "archived") {
+          regs.names = (regRows || []).map(function (r) {
+            return { name: String(r.name || "").slice(0, 30), "class": String(r["class"] || "").slice(0, 30) };
+          });
+        }
+      } catch (eRegs) { /* 报名汇总失败不影响作品展示 */ }
       return http.json(req, res, 200, {
         ok: true,
         event: {
@@ -55,7 +67,8 @@ module.exports = async function (req, res) {
           status: ev.status,
           created_at: ev.created_at
         },
-        works: works || []
+        works: works || [],
+        regs: regs
       });
     }
 

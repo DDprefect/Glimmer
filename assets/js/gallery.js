@@ -48,7 +48,9 @@
       sub: p.author ? p.category + " · " + p.author : p.category,
       shot: exifShot(p),
       ratio: 0,
-      db: true
+      db: true,
+      /* v2.8.0：活动投稿标记——计入「本期展出」但不进常规网格，只在活动展示页出现 */
+      eventId: p.event_id || 0
     };
   }
 
@@ -70,16 +72,22 @@
     var dbItems = [];
     var all = dbItems.concat(staticAll); // 初始仅静态，接口回来后合并
 
+    /* v2.8.0：常规作品 = 排除活动投稿。活动投稿计入「本期展出」总数，
+       但不进分类筛选与网格——它们只在活动展示页出现。 */
+    function regular() {
+      return all.filter(function (w) { return !w.eventId; });
+    }
+
     /* v2.6.0：静态老作品被干部移入回收站 / 永久移除后，site.js 会派发
        glimmer:static-excluded；这里重算静态来源、刷新筛选计数并重渲染。 */
     function syncStatic() {
-      if (!grid) return;
+      if (!grid || view !== "grid") return; /* 活动视图下清单到达不打断当前视图 */
       staticAll = G.visibleWorks ? G.visibleWorks() : (window.WORKS || []);
       all = dbItems.concat(staticAll);
       if (filterHost) {
         $$(".filter", filterHost).forEach(function (b) {
           var n = b.getAttribute("data-cat");
-          var count = n === "all" ? all.length : all.filter(function (w) { return w.cat === n; }).length;
+          var count = n === "all" ? regular().length : regular().filter(function (w) { return w.cat === n; }).length;
           var badge = b.querySelector("b");
           if (badge) badge.textContent = count;
         });
@@ -98,11 +106,14 @@
     if (filterHost) {
       filterHost.innerHTML = CATS.map(function (c) {
         var n = c.key === "all"
-          ? all.length
-          : all.filter(function (w) { return w.cat === c.key; }).length;
+          ? regular().length
+          : regular().filter(function (w) { return w.cat === c.key; }).length;
         return '<button class="filter' + (c.key === "all" ? " is-on" : "") + '" type="button" data-cat="' + c.key + '">' +
                  c.label + " <b>" + n + "</b></button>";
-      }).join("");
+      }).join("") +
+      /* v2.8.0：活动入口——进行中的活动带脉冲点 */
+      '<button class="filter filter--event" type="button" data-event="1" title="活动作品与回顾">' +
+        '<i class="filter__dot" aria-hidden="true" hidden></i>活动 <b id="event-tab-n"></b></button>';
 
       $$(".filter", filterHost).forEach(function (b) {
         b.addEventListener("click", function () {
@@ -139,7 +150,8 @@
 
     /* ---------------- 渲染 ---------------- */
     function current() {
-      return state.cat === "all" ? all : all.filter(function (w) { return w.cat === state.cat; });
+      var reg = regular();
+      return state.cat === "all" ? reg : reg.filter(function (w) { return w.cat === state.cat; });
     }
 
     function render(reset) {
@@ -185,6 +197,153 @@
       }, { threshold: .1 });
       $$("[data-reveal]", grid).forEach(function (e) { io.observe(e); });
     }
+
+    /* ---------------- 活动视图（v2.8.0） ----------------
+       view: "grid" 常规网格 | "eventList" 活动列表 | "eventDetail" 单活动展示。
+       活动投稿计入「本期展出」但不进常规网格；详情视图含作品网格 +
+       活动时间 + 参与人数 + 名单（归档活动公开姓名与班级，绝无联系方式）。 */
+    var view = "grid";
+    var moreBtn = $('.filter--event', filterHost);
+
+    function setView(v) {
+      view = v;
+      $$(".filter", filterHost).forEach(function (b) {
+        b.classList.toggle("is-on", v !== "grid" ? b.hasAttribute("data-event") : b.getAttribute("data-cat") === state.cat);
+      });
+      if (v === "grid") {
+        try {
+          var u0 = new URL(location.href);
+          u0.searchParams.delete("event");
+          history.replaceState(null, "", u0.pathname + (u0.search ? u0.search : "") + u0.hash);
+        } catch (e0) {}
+      }
+    }
+
+    function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+
+    function renderEventList(list) {
+      var head =
+        '<div class="evhead">' +
+          '<div><span class="eyebrow eyebrow--red">Events　活动作品</span>' +
+          '<h2 class="h3" style="margin-top:10px">活动拍摄与回顾</h2>' +
+          '<p class="evhead__tip">活动投稿会出现在对应活动页；这里可以直达进行中的活动，也能翻看往期回顾（作品、参与人数与名单）。</p></div>' +
+        "</div>";
+      var groups = [
+        { label: "正在进行", items: list.filter(function (e) { return e.status === "published"; }) },
+        { label: "往期回顾", items: list.filter(function (e) { return e.status === "archived"; }) }
+      ];
+      var body = groups.map(function (g) {
+        if (!g.items.length) return "";
+        return '<h3 class="admin-subhead">' + g.label + "</h3>" +
+          '<div class="evlist">' +
+          g.items.map(function (e) {
+            return '<a class="event-card" href="gallery.html?event=' + encodeURIComponent(e.id) + '">' +
+              '<div class="event-card__body"><h3>' + esc(e.title) + "</h3>" +
+              "<p>" + esc(e.activity_date ? "活动日期 " + e.activity_date + " · " : "") + esc(e.excerpt || "点开查看作品与回顾") + "</p></div>" +
+              '<span class="event-card__end">' + (e.status === "archived" ? "回顾 →" : "查看 / 报名 →") + "</span>" +
+            "</a>";
+          }).join("") +
+          "</div>";
+      }).join("");
+      grid.innerHTML = head + (body || '<div class="works-empty">还没有活动。活动发布后会出现在这里。</div>');
+    }
+
+    function renderEventDetail(j) {
+      var ev = j.event || {};
+      var regs = j.regs || {};
+      var isPast = ev.status === "archived";
+      var head =
+        '<div class="evhead">' +
+          '<a class="evback" href="gallery.html" data-evback>← 返回作品集</a>' +
+          '<h2 class="h3" style="margin-top:12px">' + esc(ev.title) +
+            ' <span class="admin-event__st is-' + ev.status + '">' + (isPast ? "已结束" : "进行中") + "</span></h2>" +
+          (ev.activity_date ? '<p class="evhead__tip">活动日期 · ' + esc(ev.activity_date) + "</p>" : "") +
+          '<div class="evstats">' +
+            '<span class="tag">作品 ' + (j.works || []).length + " 张</span>" +
+            '<span class="tag">参与报名 ' + regs.count + " 人</span>" +
+            (isPast ? "" : '<a class="btn btn--sm" href="event.html?id=' + encodeURIComponent(ev.id) + '">去活动页报名 →</a>') +
+          "</div>" +
+          (regs.names && regs.names.length
+            ? '<p class="evhead__tip evnames"><b>参与名单：</b>' + regs.names.map(function (r) {
+                return esc(r.name) + (r["class"] ? "（" + esc(r["class"]) + "）" : "");
+              }).join("、") + "</p>"
+            : "") +
+        "</div>";
+      var works = (j.works || []).map(dbToWork);
+      var body = works.length
+        ? '<div class="works" id="evgrid">' + works.map(function (w, i) { return G.workCard(w, i, 0); }).join("") + "</div>"
+        : '<div class="works-empty">' + (isPast ? "这次活动没有留下公开作品。" : "活动作品审核通过后会出现在这里，现在可以先去报名。") + "</div>";
+      grid.innerHTML = head + body;
+      var evHost = $("#evgrid", grid);
+      if (evHost && G.bindCards) G.bindCards(evHost, works);
+      if (evHost) {
+        /* workCard 自带 data-reveal，动态插入没人观察——直接点亮（v2.7.1 教训） */
+        $$("[data-reveal]", evHost).forEach(function (el) { el.classList.add("is-in"); });
+        if (G.eagerAll) G.eagerAll(evHost);
+      }
+    }
+
+    function openEventDetail(id) {
+      view = "eventDetail";
+      $$(".filter", filterHost).forEach(function (b) {
+        b.classList.toggle("is-on", b.hasAttribute("data-event"));
+      });
+      grid.innerHTML = '<div class="works-empty">活动加载中…</div>';
+      fetch("api/events?id=" + encodeURIComponent(id))
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j || !j.ok || !j.event) { grid.innerHTML = '<div class="works-empty">活动不存在或已删除。 <a class="evback" href="gallery.html" data-evback>← 返回作品集</a></div>'; return; }
+          renderEventDetail(j);
+        })
+        .catch(function () {
+          grid.innerHTML = '<div class="works-empty">活动加载失败，请稍后重试。</div>';
+        });
+    }
+
+    function openEventList() {
+      view = "eventList";
+      $$(".filter", filterHost).forEach(function (b) {
+        b.classList.toggle("is-on", b.hasAttribute("data-event"));
+      });
+      grid.innerHTML = '<div class="works-empty">活动加载中…</div>';
+      fetch("api/events")
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          renderEventList((j && j.ok && j.current ? j.current : []).concat(j && j.past ? j.past : []));
+        })
+        .catch(function () {
+          grid.innerHTML = '<div class="works-empty">活动加载失败，请稍后重试。</div>';
+        });
+    }
+
+    if (moreBtn) {
+      moreBtn.addEventListener("click", function () {
+        if (view !== "grid") { setView("grid"); render(true); return; }
+        openEventList();
+      });
+    }
+    grid.addEventListener("click", function (e) {
+      if (!e.target.closest) return;
+      var back = e.target.closest("[data-evback]");
+      if (back) { e.preventDefault(); setView("grid"); render(true); return; }
+    });
+
+    /* URL 直达：gallery.html?event=N 打开活动展示 */
+    var wantEvent = "";
+    try { wantEvent = new URLSearchParams(location.search).get("event") || ""; } catch (eQ) {}
+    if (wantEvent) openEventDetail(wantEvent);
+
+    /* 活动按钮上的脉冲点：有进行中的活动就亮 */
+    fetch("api/events")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var current = (j && j.ok && j.current) || [];
+        var n = $("#event-tab-n");
+        var dot = $(".filter__dot", filterHost);
+        if (n) n.textContent = current.length ? String(current.length) : "";
+        if (dot) dot.hidden = !current.length;
+      })
+      .catch(function () { /* 静默 */ });
 
     render(true);
 
@@ -248,6 +407,7 @@
     /* ---------------- 键盘：左右切换分类 ---------------- */
     document.addEventListener("keydown", function (e) {
       if (document.querySelector(".lb.is-open")) return;
+      if (view !== "grid") return; /* 活动视图下不响应分类键盘切换 */
       var i = CATS.findIndex(function (c) { return c.key === state.cat; });
       if (e.key === "ArrowRight" && i < CATS.length - 1) $$(".filter", filterHost)[i + 1].click();
       if (e.key === "ArrowLeft" && i > 0) $$(".filter", filterHost)[i - 1].click();
