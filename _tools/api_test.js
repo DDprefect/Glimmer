@@ -275,8 +275,7 @@ function startApiServer() {
     "/api/replace": require(path.join(ROOT, "api/replace.js")),
     "/api/static-works": require(path.join(ROOT, "api/static-works.js")),
     "/api/events": require(path.join(ROOT, "api/events.js")),
-    "/api/event-register": require(path.join(ROOT, "api/event-register.js")),
-    "/api/pills": require(path.join(ROOT, "api/pills.js"))
+    /* v2.9.2：event-register 并入 register、pills 并入 static-works（Vercel Hobby 限 12 函数，rewrites 保持前端 URL 不变）。测试直接打 rewrite 后路径 */
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -1096,13 +1095,13 @@ async function testApi() {
 
 
   /* ---------- v2.9.0：首屏胶囊配置 ---------- */
-  r = await call(P, "GET", "/api/pills");
+  r = await call(P, "GET", "/api/static-works?type=pills");
   ok("胶囊配置未保存 → config null（前端走内置默认）", r.status === 200 && r.json.ok && r.json.config === null, JSON.stringify(r.json));
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "pills_get" });
   ok("后台读胶囊配置 → null", r.status === 200 && r.json.config === null);
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "pills_save", config: { recruit: { enabled: true, text: "秋季招新进行中", link: "join.html#form", tone: "gold" }, eventPill: true, custom: [ { id: "c1", text: "校庆影展", link: "event.html?id=1", tone: "red", enabled: true }, { id: "c2", text: "", link: "x", tone: "gold", enabled: true } ] } });
   ok("pills_save → 保存成功且空文字条目被丢弃（归一化）", r.status === 200 && r.json.ok && r.json.config.custom.length === 1, JSON.stringify(r.json).slice(0, 160));
-  r = await call(P, "GET", "/api/pills");
+  r = await call(P, "GET", "/api/static-works?type=pills");
   ok("公开读回胶囊配置（招新+自定义+活动开关）", r.json.config && r.json.config.recruit.text === "秋季招新进行中" && r.json.config.custom[0].text === "校庆影展" && r.json.config.eventPill === true, JSON.stringify(r.json.config));
   r = await call(P, "POST", "/api/admin", { password: "wrong", action: "pills_save", config: {} });
   ok("胶囊写操作需密码 → 401", r.status === 401);
@@ -1127,15 +1126,15 @@ async function testApi() {
   ok("发布后详情可访问且正文完整", r.status === 200 && r.json.event.status === "published" && /柳江边集合/.test(r.json.event.content), JSON.stringify(r.json.event).slice(0, 120));
 
   /* 活动报名 */
-  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小明", "class": "高一2班", contact: "QQ 777", intro: "想去" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "小明", "class": "高一2班", contact: "QQ 777", intro: "想去" });
   ok("活动报名 → 成功", r.status === 200 && r.json.ok && !r.json.duplicate, JSON.stringify(r.json));
-  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小明", contact: "QQ 777" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "小明", contact: "QQ 777" });
   ok("同联系方式重复报名 → duplicate 提示", r.status === 200 && r.json.ok && r.json.duplicate === true, JSON.stringify(r.json));
-  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小红", contact: "QQ 778" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "小红", contact: "QQ 778" });
   ok("第二人报名成功", r.status === 200 && r.json.ok);
-  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "", contact: "QQ 779" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "", contact: "QQ 779" });
   ok("缺姓名 → 400", r.status === 400);
-  r = await call(P, "POST", "/api/event-register", { eventId: "99999", name: "小刚", contact: "QQ 780" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: "99999", name: "小刚", contact: "QQ 780" });
   ok("不存在活动 → 404", r.status === 404);
 
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_regs", id: evId });
@@ -1161,7 +1160,7 @@ async function testApi() {
   r = await call(P, "GET", "/api/events");
   ok("归档后移入 past 列表", r.json.current.length === 0 && r.json.past.length === 1, JSON.stringify(r.json));
   rl._buckets.clear(); /* 前面报名用例耗尽了单 IP 配额 */
-  r = await call(P, "POST", "/api/event-register", { eventId: evId, name: "小刚", contact: "QQ 780" });
+  r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "小刚", contact: "QQ 780" });
   ok("归档后报名 → 拒绝", r.status === 400, JSON.stringify(r.json));
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("晚了") + "&eventId=" + evId, fakeJpeg(), { "Content-Type": "application/octet-stream" });
   ok("归档后投稿挂靠 → 拒绝", r.status === 400);

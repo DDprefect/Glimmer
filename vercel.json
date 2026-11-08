@@ -10,6 +10,10 @@
     }
   ],
   "regions": ["hkg1"],
+  "rewrites": [
+    { "source": "/api/event-register", "destination": "/api/register?type=event" },
+    { "source": "/api/pills", "destination": "/api/static-works?type=pills" }
+  ],
   "functions": {
     "api/*.js": { "maxDuration": 30 }
   },
