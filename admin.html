@@ -129,6 +129,25 @@
 
     <!-- 活动（v2.7.0）：创建 / 编辑 / 发布 / 归档 + 每活动报名管理 -->
     <div class="admin-pane" id="pane-events">
+      <!-- v2.9.0：首屏胶囊管理（招新 / 自定义 / 活动开关） -->
+      <div class="admin-pill-card" id="pill-card">
+        <h3 class="admin-subhead" style="margin-top:0">首屏胶囊 <span style="font-weight:400;font-size:.78rem;opacity:.6">（官网首页顶部的高亮入口，向下最多显示 4 个）</span></h3>
+        <p class="admin-subs-tip" id="pill-card-tip" style="display:none"></p>
+        <div class="admin-pill-form">
+          <label class="check"><input type="checkbox" id="pill-recruit-on"> 招新胶囊</label>
+          <input class="admin-edit__t" id="pill-recruit-text" type="text" maxlength="30" placeholder="文字（如：秋季招新进行中）" style="flex:1 1 200px">
+          <input class="admin-edit__t" id="pill-recruit-link" type="text" maxlength="120" placeholder="链接（如 join.html#form）" style="flex:1 1 200px">
+        </div>
+        <div class="admin-pill-form">
+          <label class="check"><input type="checkbox" id="pill-event-on"> 活动胶囊（发布活动后自动出现）</label>
+        </div>
+        <div id="pill-custom-list"></div>
+        <div class="admin-pill-form" style="align-items:center">
+          <button class="btn btn--sm" type="button" id="pill-add">＋ 添加自定义胶囊</button>
+          <button class="admin-op admin-op--ok" type="button" id="pill-save">保存胶囊设置</button>
+        </div>
+      </div>
+
       <div class="admin-pane-head">
         <p class="admin-subs-tip">发布后活动会出现在官网首页，投稿页自动出现「参与该活动」入口；归档后首页与上传入口消失，但活动页保留为「已结束」回顾，报名名单与作品记录全部保留。</p>
         <button class="btn btn--sm" type="button" id="event-new">＋ 新建活动</button>

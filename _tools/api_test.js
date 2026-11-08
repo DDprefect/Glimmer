@@ -275,7 +275,8 @@ function startApiServer() {
     "/api/replace": require(path.join(ROOT, "api/replace.js")),
     "/api/static-works": require(path.join(ROOT, "api/static-works.js")),
     "/api/events": require(path.join(ROOT, "api/events.js")),
-    "/api/event-register": require(path.join(ROOT, "api/event-register.js"))
+    "/api/event-register": require(path.join(ROOT, "api/event-register.js")),
+    "/api/pills": require(path.join(ROOT, "api/pills.js"))
   };
   var server = http.createServer(function (req, res) {
     var u = new URL(req.url, "http://127.0.0.1");
@@ -400,8 +401,8 @@ async function testApi() {
         if (opts && opts.body) cosBodies.set(path, Buffer.from(opts.body).toString("utf8"));
       }
       if (method === "DELETE") { cosObjects.delete(path); cosBodies.delete(path); }
-      /* GET：清单读回；未写过则返回 404，驱动空清单降级 */
-      if (method === "GET" && path.indexOf("_config/hidden-works.json") !== -1) {
+      /* GET：_config/*.json 配置类对象读回（清单/胶囊）；未写过则 404，驱动空降级 */
+      if (method === "GET" && path.indexOf("_config/") !== -1 && /\.json$/.test(path)) {
         var txt = cosBodies.get(path);
         return Promise.resolve({
           ok: !!txt, status: txt ? 200 : 404,
@@ -1093,6 +1094,18 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "batch", ids: ["9002"], op: "trash" });
   ok("批量 trash → 软删除不删行", r.status === 200 && r.json.done === 1 && mock.state.photos.some(function (p) { return p.id === 9002 && p.status === "trash"; }));
 
+
+  /* ---------- v2.9.0：首屏胶囊配置 ---------- */
+  r = await call(P, "GET", "/api/pills");
+  ok("胶囊配置未保存 → config null（前端走内置默认）", r.status === 200 && r.json.ok && r.json.config === null, JSON.stringify(r.json));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "pills_get" });
+  ok("后台读胶囊配置 → null", r.status === 200 && r.json.config === null);
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "pills_save", config: { recruit: { enabled: true, text: "秋季招新进行中", link: "join.html#form", tone: "gold" }, eventPill: true, custom: [ { id: "c1", text: "校庆影展", link: "event.html?id=1", tone: "red", enabled: true }, { id: "c2", text: "", link: "x", tone: "gold", enabled: true } ] } });
+  ok("pills_save → 保存成功且空文字条目被丢弃（归一化）", r.status === 200 && r.json.ok && r.json.config.custom.length === 1, JSON.stringify(r.json).slice(0, 160));
+  r = await call(P, "GET", "/api/pills");
+  ok("公开读回胶囊配置（招新+自定义+活动开关）", r.json.config && r.json.config.recruit.text === "秋季招新进行中" && r.json.config.custom[0].text === "校庆影展" && r.json.config.eventPill === true, JSON.stringify(r.json.config));
+  r = await call(P, "POST", "/api/admin", { password: "wrong", action: "pills_save", config: {} });
+  ok("胶囊写操作需密码 → 401", r.status === 401);
 
   /* ---------- v2.7.0：活动系统 ---------- */
   r = await call(P, "GET", "/api/events");

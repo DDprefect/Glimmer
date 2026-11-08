@@ -36,6 +36,7 @@ var notifyLib = require("./_lib/notify");
 var rl = require("./_lib/ratelimit");
 var watermarkLib = require("./_lib/watermark");
 var staticworks = require("./_lib/staticworks");
+var pillsLib = require("./_lib/pills");
 
 /* 活动状态文案（导出/展示共用） */
 var EVENT_STATUS_TEXT = { draft: "草稿", published: "进行中", archived: "已归档" };
@@ -315,6 +316,16 @@ module.exports = async function (req, res) {
       }
       http.json(req, res, 200, { ok: true, watermarked: true });
       return;
+    }
+
+    /* ---------------- 首屏胶囊配置（v2.9.0） ---------------- */
+    if (action === "pills_get") {
+      var pillCfg = await pillsLib.read();
+      return http.json(req, res, 200, { ok: true, config: pillCfg });
+    }
+    if (action === "pills_save") {
+      var savedPills = await pillsLib.write(body.config);
+      return http.json(req, res, 200, { ok: true, config: savedPills });
     }
 
     /* ---------------- 活动管理（v2.7.0） ---------------- */

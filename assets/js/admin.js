@@ -336,6 +336,7 @@
 
     renderStatic();
     renderEvents();
+    loadPills();
     renderSubs();
     updateBatchCount();
   }
@@ -886,6 +887,102 @@
         return load();
       }).catch(errHandler).then(function () { btn.disabled = false; });
     });
+  });
+
+  /* ---------------- 首屏胶囊管理（v2.9.0） ----------------
+     整包读写 COS 配置：招新胶囊（可编辑/隐藏，不可删——常驻入口防误删）、
+     活动胶囊总开关、自定义公告胶囊（增删改开关，最多 6 条）。 */
+  var pillCfg = null; /* { recruit, eventPill, custom } */
+  var pillLoaded = false; /* 只在首次进后台拉一次——列表刷新不覆盖正在编辑的表单 */
+
+  function pillRowHtml(c) {
+    return '<div class="admin-pill-form" data-pid="' + esc(c.id) + '">' +
+      '<label class="check"><input type="checkbox" class="pill-c-on"' + (c.enabled ? " checked" : "") + "> 显示</label>" +
+      '<input class="admin-edit__t pill-c-text" type="text" maxlength="30" value="' + esc(c.text) + '" placeholder="文字" style="flex:1 1 180px">' +
+      '<input class="admin-edit__t pill-c-link" type="text" maxlength="120" value="' + esc(c.link) + '" placeholder="链接（页面或 event.html?id=N）" style="flex:1 1 180px">' +
+      '<select class="admin-cat pill-c-tone" title="颜色">' +
+        '<option value="gold"' + (c.tone !== "red" ? " selected" : "") + ">金色</option>" +
+        '<option value="red"' + (c.tone === "red" ? " selected" : "") + ">红色</option>" +
+      "</select>" +
+      '<button class="admin-op admin-op--del" type="button" data-pact="del">删除</button>' +
+    "</div>";
+  }
+
+  function renderPills() {
+    var card = $("#pill-card");
+    if (!card) return;
+    if (!pillCfg) {
+      $("#pill-card-tip").style.display = "";
+      $("#pill-card-tip").textContent = "还没有保存过胶囊配置：下面按钮保存后即接管官网首屏（当前官网用的是内置默认）。";
+      $("#pill-recruit-on").checked = true;
+      $("#pill-recruit-text").value = "秋季招新进行中";
+      $("#pill-recruit-link").value = "join.html#form";
+      $("#pill-event-on").checked = true;
+      $("#pill-custom-list").innerHTML = "";
+      return;
+    }
+    $("#pill-card-tip").style.display = "none";
+    $("#pill-recruit-on").checked = !!(pillCfg.recruit && pillCfg.recruit.enabled);
+    $("#pill-recruit-text").value = pillCfg.recruit ? pillCfg.recruit.text : "";
+    $("#pill-recruit-link").value = pillCfg.recruit ? pillCfg.recruit.link : "";
+    $("#pill-event-on").checked = pillCfg.eventPill !== false;
+    $("#pill-custom-list").innerHTML = (pillCfg.custom || []).map(pillRowHtml).join("");
+  }
+
+  function loadPills() {
+    if (pillLoaded) return;
+    pillLoaded = true;
+    api("pills_get").then(function (j) {
+      pillCfg = j.config || null;
+      renderPills();
+    }).catch(function () { /* 配置读失败：面板维持默认，不影响其它功能 */ });
+  }
+
+  $("#pill-add").addEventListener("click", function () {
+    var list = $("#pill-custom-list");
+    if (list.children.length >= 6) { toast("自定义胶囊最多 6 条。", "is-err"); return; }
+    list.insertAdjacentHTML("beforeend", pillRowHtml({ id: "c" + Date.now().toString(36), text: "", link: "", tone: "gold", enabled: true }));
+    var rows = list.querySelectorAll(".admin-pill-form");
+    var last = rows[rows.length - 1];
+    if (last) last.querySelector(".pill-c-text").focus();
+  });
+
+  $("#pill-custom-list").addEventListener("click", function (e) {
+    var btn = e.target.closest ? e.target.closest('button[data-pact="del"]') : null;
+    if (!btn) return;
+    btn.closest(".admin-pill-form").remove();
+  });
+
+  $("#pill-save").addEventListener("click", function () {
+    var recruitOn = $("#pill-recruit-on").checked;
+    var recText = $("#pill-recruit-text").value.trim();
+    var recLink = $("#pill-recruit-link").value.trim();
+    if (recruitOn && (!recText || !recLink)) { toast("招新胶囊已开启，文字和链接都要填。", "is-err"); return; }
+    var custom = [];
+    var bad = false;
+    $$("#pill-custom-list .admin-pill-form").forEach(function (row) {
+      var text = row.querySelector(".pill-c-text").value.trim();
+      var link = row.querySelector(".pill-c-link").value.trim();
+      if (!text || !link) { bad = true; return; }
+      custom.push({
+        id: row.getAttribute("data-pid"),
+        text: text, link: link,
+        tone: row.querySelector(".pill-c-tone").value,
+        enabled: row.querySelector(".pill-c-on").checked
+      });
+    });
+    if (bad) { toast("有自定义胶囊缺文字或链接，补全或删掉再保存。", "is-err"); return; }
+    var btn = $("#pill-save");
+    btn.disabled = true;
+    api("pills_save", { config: {
+      recruit: { enabled: recruitOn, text: recText, link: recLink, tone: "gold" },
+      eventPill: $("#pill-event-on").checked,
+      custom: custom
+    } }).then(function () {
+      toast("胶囊设置已保存，官网首页刷新后生效。", "is-ok");
+      /* 拉取服务端归一化后的权威版本回填（不触发 load 全刷） */
+      api("pills_get").then(function (j) { pillCfg = j.config || null; renderPills(); }).catch(function () {});
+    }).catch(errHandler).then(function () { btn.disabled = false; });
   });
 
   /* ---------------- 事件：活动管理（v2.7.0） ---------------- */

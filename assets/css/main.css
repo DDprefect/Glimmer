@@ -2781,3 +2781,7 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .evlist { display: grid; gap: 14px; }
 .evlist .event-card { display: grid; grid-template-columns: 1fr auto; }
 @media (max-width: 640px) { .evlist .event-card { grid-template-columns: 1fr; } }
+/* v2.9.0：后台首屏胶囊管理 */
+.admin-pill-card { border: 1px solid var(--line); border-left: 4px solid var(--gold, #BF8B34); border-radius: var(--r-lg); background: var(--card); padding: 16px 18px; margin-bottom: 22px; }
+.admin-pill-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.admin-pill-form .admin-edit__t { min-width: 0; }

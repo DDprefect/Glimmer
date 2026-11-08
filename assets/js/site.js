@@ -234,28 +234,69 @@
       "</a>";
   }
 
-  /* ---------------------------------------------------------- 活动胶囊（v2.8.0）
-     hero 区招新胶囊的同款高亮——进行中的活动以红色脉冲点胶囊直接出现在首屏，
-     点击直达活动页（介绍/报名/作品）。仅首页有 #ebar 容器；无活动时保持隐藏。
+  /* ---------------------------------------------------------- 首屏胶囊（v2.9.0）
+     hero 胶囊由后台配置驱动（/api/pills）：招新胶囊（文字/链接/开关可改）、
+     自定义公告胶囊、活动胶囊总开关。配置未保存过（config 为 null）时，
+     沿用代码内置的 RECRUIT 默认 + 活动胶囊自动出现——升级零感知。
      动态插入无 data-reveal，不踩 v2.7.1 的隐形坑。 */
-  function renderEventPill() {
-    var el = $("#ebar");
-    if (!el || typeof fetch !== "function") return;
+  function pillHtml(href, text, tone) {
+    return '<a class="hero__recruit' + (tone === "red" ? " hero__event" : "") + '" href="' + esc(href) + '">' +
+      '<i aria-hidden="true"></i>' + esc(text) +
+      "<span aria-hidden=\"true\">→</span>" +
+    "</a>";
+  }
+
+  function fetchEventPills(cb) {
+    if (typeof fetch !== "function") return;
     fetch("api/events")
       .then(function (r) { return r.json(); })
       .then(function (j) {
         var current = (j && j.ok && j.current) || [];
-        if (!current.length) return;
-        el.hidden = false;
-        /* 最多放 2 个胶囊防止首屏拥挤，其余在下方「社团活动」区块 */
-        el.innerHTML = current.slice(0, 2).map(function (e) {
-          return '<a class="hero__recruit hero__event" href="event.html?id=' + encodeURIComponent(e.id) + '">' +
-            '<i aria-hidden="true"></i>' + esc("活动报名 · " + (e.title || "").slice(0, 16)) +
-            "<span aria-hidden=\"true\">→</span>" +
-          "</a>";
-        }).join("");
+        cb(current.slice(0, 2));
       })
-      .catch(function () { /* 接口不可用：胶囊不出现，不挡首页 */ });
+      .catch(function () { cb([]); });
+  }
+
+  function renderHeroPills() {
+    var el = $("#ebar");
+    if (!el) return;
+    var done = false;
+    function finish(recruitPill, customs, eventPillOn, hasCfg) {
+      if (done) return;
+      done = true;
+      /* 配置存在 → #rbar 的内置招新胶囊让位给配置版，避免首屏双招新 */
+      if (hasCfg) {
+        var rb = $("#rbar");
+        if (rb) { rb.hidden = true; rb.innerHTML = ""; }
+      }
+      var html = hasCfg ? (recruitPill || "") : "";
+      (customs || []).forEach(function (c) { html += pillHtml(c.link, c.text, c.tone); });
+      if (eventPillOn) {
+        fetchEventPills(function (current) {
+          current.forEach(function (e) {
+            el.insertAdjacentHTML("beforeend", pillHtml("event.html?id=" + encodeURIComponent(e.id), "活动报名 · " + String(e.title || "").slice(0, 16), "red"));
+          });
+        });
+      }
+      if (html || eventPillOn) {
+        el.hidden = false;
+        el.innerHTML = html + el.innerHTML;
+      }
+    }
+    if (typeof fetch !== "function") { finish(pillHtml(RECRUIT.openLink, RECRUIT.open ? RECRUIT.openText : RECRUIT.closeText, "gold"), [], true); return; }
+    fetch("api/pills")
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var cfg = j && j.ok ? j.config : null;
+        if (!cfg) {
+          /* 未配置：内置招新默认 + 活动胶囊（升级前行为） */
+          finish(pillHtml(RECRUIT.openLink, RECRUIT.open ? RECRUIT.openText : RECRUIT.closeText, "gold"), [], true);
+          return;
+        }
+        var rec = cfg.recruit && cfg.recruit.enabled ? pillHtml(cfg.recruit.link, cfg.recruit.text, cfg.recruit.tone) : "";
+        finish(rec, (cfg.custom || []).filter(function (c) { return c.enabled; }), cfg.eventPill !== false, true);
+      })
+      .catch(function () { finish(pillHtml(RECRUIT.openLink, RECRUIT.open ? RECRUIT.openText : RECRUIT.closeText, "gold"), [], true); });
   }
 
   /* ---------------------------------------------------------- 复制文本
@@ -818,7 +859,7 @@
     curtain();
     renderNav();
     renderRecruit();
-    renderEventPill();
+    renderHeroPills();
     renderFoot();
     reveals();
     counters();

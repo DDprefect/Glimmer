@@ -222,6 +222,9 @@ async function testIndex() {
       if (url === "api/events") {
         return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, current: [{ id: 5, title: "秋季外拍", activity_date: "2026-11-15", status: "published", excerpt: "柳江边集合" }], past: [{ id: 3, title: "夏季月赛", activity_date: "2026-08-01", status: "archived", excerpt: "校园人像主题" }] }); } });
       }
+      if (url === "api/pills") {
+        return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, config: { recruit: { enabled: true, text: "招新胶囊·后台版", link: "join.html#form", tone: "gold" }, eventPill: true, custom: [ { id: "c1", text: "校庆影展", link: "event.html?id=5", tone: "red", enabled: true } ] } }); } });
+      }
       return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ ok: true, photos: [] }); } });
     };
   });
@@ -245,7 +248,8 @@ async function testIndex() {
   var evSec = d.getElementById("events-sec");
   ok("首页活动区块显示（1 进行中 + 1 往期）", evSec && !evSec.hidden && d.querySelectorAll("#events-grid .event-card").length === 2, (evSec ? (evSec.hidden ? "hidden" : "shown") : "no sec") + ", " + d.querySelectorAll("#events-grid .event-card").length + " 张, innerHTML=" + d.getElementById("events-grid").innerHTML.slice(0, 80));
   ok("活动卡链接到活动页且带 id", !!d.querySelector('#events-grid .event-card[href="event.html?id=5"]'));
-  ok("hero 区活动胶囊（招新同款高亮，v2.8.0）", !!d.querySelector("#ebar .hero__event.hero__recruit") && /活动报名/.test(d.getElementById("ebar").textContent), d.getElementById("ebar") ? d.getElementById("ebar").textContent.slice(0, 40) : "no ebar");
+  ok("hero 活动胶囊仍在（v2.8.0）", !!d.querySelector("#ebar .hero__event.hero__recruit") && /活动报名/.test(d.getElementById("ebar").textContent), d.getElementById("ebar") ? d.getElementById("ebar").textContent.slice(0, 40) : "no ebar");
+  ok("后台胶囊配置接管首屏：#rbar 隐藏、#ebar 含后台招新版+自定义（v2.9.0）", d.getElementById("rbar").hidden && /招新胶囊·后台版/.test(d.getElementById("ebar").textContent) && /校庆影展/.test(d.getElementById("ebar").textContent), d.getElementById("ebar").textContent.slice(0, 60));
   ok("往期活动标注「已结束 · 回顾」", /已结束/.test((d.querySelectorAll("#events-grid .event-card .event-card__end")[1] || {}).textContent || ""));
 
   /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
@@ -394,6 +398,9 @@ async function testAdmin() {
       var b = opts && opts.body ? JSON.parse(opts.body) : null;
       lastBody = b;
       callLog.push(b);
+      if (b && b.action === "pills_get") {
+        return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, config: { recruit: { enabled: true, text: "秋季招新进行中", link: "join.html#form", tone: "gold" }, eventPill: true, custom: [ { id: "c1", text: "校庆影展", link: "event.html?id=1", tone: "red", enabled: true } ] } }); } });
+      }
       if (b && b.action === "event_regs") {
         return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ ok: true, submissions: [{ id: 31, name: "报名人", "class": "高一1班", contact: "QQ 1", intro: "冲", handled: false, created_at: "2026-11-02T00:00:00Z" }] }); } });
       }
@@ -568,6 +575,18 @@ async function testAdmin() {
   eventsTab.click();
   ok("活动标签可打开且列出活动", d.getElementById("pane-events").classList.contains("is-on") && /秋季外拍/.test(d.getElementById("events-list").textContent));
   ok("进行中活动带归档按钮与报名入口", !!d.querySelector('#events-list button[data-eact="archive"]') && !!d.querySelector('#events-list button[data-eact="regs"]'));
+  ok("胶囊管理卡渲染（招新默认 + 自定义 1 条）", !!d.getElementById("pill-card") && d.getElementById("pill-recruit-on").checked && d.querySelectorAll("#pill-custom-list .admin-pill-form").length === 1, d.querySelectorAll("#pill-custom-list .admin-pill-form").length + " 条自定义");
+  d.getElementById("pill-add").click();
+  ok("添加自定义胶囊 → 新行出现", d.querySelectorAll("#pill-custom-list .admin-pill-form").length === 2);
+  /* 补全新行的必填项（保存校验要求） */
+  var lastRow = d.querySelectorAll("#pill-custom-list .admin-pill-form")[1];
+  lastRow.querySelector(".pill-c-text").value = "月赛征稿";
+  lastRow.querySelector(".pill-c-link").value = "upload.html";
+  callLog.length = 0;
+  d.getElementById("pill-save").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  ok("保存胶囊 → 请求 pills_save 带整包配置", callLog.some(function (b) { return b && b.action === "pills_save" && b.config && b.config.recruit && Array.isArray(b.config.custom); }), JSON.stringify(callLog).slice(0, 160));
+
   callLog.length = 0;
   d.querySelector('#events-list button[data-eact="regs"]').click();
   await new Promise(function (r) { setTimeout(r, 80); });
