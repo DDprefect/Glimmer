@@ -2762,6 +2762,9 @@ body.has-hero .nav:not(.is-stuck) .nav__brand img { filter: drop-shadow(0 1px 6p
 .event-works h2 { font-family: var(--serif); font-size: 1.2rem; margin-bottom: 18px; }
 
 /* ===== v2.8.0：活动高亮入口 + 作品集活动子视图 ===== */
+/* v2.9.1：活动视图脱离瀑布流分栏（columns 会把信息头/列表切碎） */
+#works-grid.is-eventview { columns: auto; column-gap: 0; display: block; }
+#works-grid.is-eventview .works-empty { padding: 40px 0; }
 /* hero 活动胶囊：招新同款高亮，红色脉冲点区分 */
 .hero__event i { background: var(--red, #B03A22); box-shadow: 0 0 0 0 rgba(176,58,34,.55); animation: recruitPulse 1.6s infinite; }
 /* 作品集筛选栏的活动按钮 */

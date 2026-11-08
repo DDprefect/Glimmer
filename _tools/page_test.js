@@ -243,14 +243,11 @@ async function testIndex() {
   await new Promise(function (r) { setTimeout(r, 40); });
   ok("首页精选区不再包含被移除的老作品", !d.querySelector('#pick-campus .work[data-id="hanlou-06"]'), d.querySelectorAll("#pick-campus .work").length + " 张");
 
-  /* v2.7.0：首页活动区块（进行中 + 往期回顾） */
+  /* v2.9.1：首页中部活动区块已移除（与近期动态重合），活动入口收敛为 hero 胶囊 + 作品集子视图 */
   await new Promise(function (r) { setTimeout(r, 60); });
-  var evSec = d.getElementById("events-sec");
-  ok("首页活动区块显示（1 进行中 + 1 往期）", evSec && !evSec.hidden && d.querySelectorAll("#events-grid .event-card").length === 2, (evSec ? (evSec.hidden ? "hidden" : "shown") : "no sec") + ", " + d.querySelectorAll("#events-grid .event-card").length + " 张, innerHTML=" + d.getElementById("events-grid").innerHTML.slice(0, 80));
-  ok("活动卡链接到活动页且带 id", !!d.querySelector('#events-grid .event-card[href="event.html?id=5"]'));
+  ok("首页中部活动区块已移除且不渲染卡片", !d.getElementById("events-sec") && d.querySelectorAll(".event-card").length === 0, d.querySelectorAll(".event-card").length + " 张");
   ok("hero 活动胶囊仍在（v2.8.0）", !!d.querySelector("#ebar .hero__event.hero__recruit") && /活动报名/.test(d.getElementById("ebar").textContent), d.getElementById("ebar") ? d.getElementById("ebar").textContent.slice(0, 40) : "no ebar");
   ok("后台胶囊配置接管首屏：#rbar 隐藏、#ebar 含后台招新版+自定义（v2.9.0）", d.getElementById("rbar").hidden && /招新胶囊·后台版/.test(d.getElementById("ebar").textContent) && /校庆影展/.test(d.getElementById("ebar").textContent), d.getElementById("ebar").textContent.slice(0, 60));
-  ok("往期活动标注「已结束 · 回顾」", /已结束/.test((d.querySelectorAll("#events-grid .event-card .event-card__end")[1] || {}).textContent || ""));
 
   /* v2.0.12 F3：字体链接的 onload 内联事件已移除，翻转由 site.js flipFonts 接管 */
   var fontLink = d.querySelector('link[rel="stylesheet"][href*="fonts.googleapis"]');

@@ -163,44 +163,14 @@
       .catch(function () { /* 接口不可用：保持隐藏，不影响首页其它部分 */ });
   }
 
-  /* ------------------------------------------------ 社团活动（v2.7.0） */
-  function renderEvents() {
-    var sec = $("#events-sec");
-    var host = $("#events-grid");
-    if (!sec || !host) return;
-    fetch("api/events")
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (!j || !j.ok) return;
-        var current = j.current || [];
-        var past = j.past || [];
-        if (!current.length && !past.length) return; // 无活动：区块保持隐藏
-        sec.hidden = false;
-        host.innerHTML = current.concat(past).map(function (e) {
-          var isPast = e.status === "archived";
-          var d = String(e.activity_date || "").split("-");
-          var dateHtml = d.length === 3
-            ? '<div class="event-card__date">' + G.esc(d[1] + "/" + d[2]) + "<small>" + G.esc(d[0]) + "</small></div>"
-            : '<div class="event-card__date">活<small>EVENT</small></div>';
-          return '<a class="event-card" href="event.html?id=' + encodeURIComponent(e.id) + '">' +
-            dateHtml +
-            '<div class="event-card__body">' +
-              "<h3>" + G.esc(e.title) + "</h3>" +
-              "<p>" + G.esc(e.excerpt || "") + "</p>" +
-            "</div>" +
-            (isPast ? '<span class="event-card__end">已结束 · 回顾</span>' : '<span class="event-card__end">报名开放 →</span>') +
-          "</a>";
-        }).join("");
-        if (G.eagerAll) G.eagerAll(host);
-      })
-      .catch(function () { /* 接口不可用：区块保持隐藏 */ });
-  }
+  /* v2.9.1：首页中部「社团活动」区块已移除——与「近期动态」内容重合。
+     活动曝光收敛为：hero 活动胶囊（最显眼）+ 作品集「活动」子视图 +
+     活动页。此处不再渲染活动卡片。 */
 
   function boot() {
     initHero();
     renderSections();
     renderLatest();
-    renderEvents();
     /* v2.6.0：静态老作品被移入回收站后，清单异步到达时重渲染首页精选区 */
     document.addEventListener("glimmer:static-excluded", renderSections);
   }

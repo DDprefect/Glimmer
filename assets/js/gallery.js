@@ -207,6 +207,8 @@
 
     function setView(v) {
       view = v;
+      /* v2.9.1：活动视图脱离瀑布流分栏（columns:3 会把信息头和列表切碎） */
+      grid.classList.toggle("is-eventview", v !== "grid");
       $$(".filter", filterHost).forEach(function (b) {
         b.classList.toggle("is-on", v !== "grid" ? b.hasAttribute("data-event") : b.getAttribute("data-cat") === state.cat);
       });
@@ -285,6 +287,7 @@
 
     function openEventDetail(id) {
       view = "eventDetail";
+      grid.classList.add("is-eventview"); /* 脱离瀑布流分栏（v2.9.1） */
       $$(".filter", filterHost).forEach(function (b) {
         b.classList.toggle("is-on", b.hasAttribute("data-event"));
       });
@@ -302,6 +305,7 @@
 
     function openEventList() {
       view = "eventList";
+      grid.classList.add("is-eventview"); /* 脱离瀑布流分栏（v2.9.1） */
       $$(".filter", filterHost).forEach(function (b) {
         b.classList.toggle("is-on", b.hasAttribute("data-event"));
       });
