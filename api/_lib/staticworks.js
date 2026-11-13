@@ -53,13 +53,12 @@ function normalize(v) {
 
 /* 读取清单。404 = 还没建过，视为空清单；其它错误抛带标签的 Error */
 async function read() {
-  var s = cos.sign("get", KEY, 60);
   var res;
   try {
-    res = await fetch(s.url, { method: "GET" });
+    /* v3.0.0：走统一多域名 + 网络重试请求层 */
+    res = await cos.request("get", KEY, { method: "GET" }, null, "静态作品清单读取失败");
   } catch (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("静态作品清单读取失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
+    throw new Error(e.message || "静态作品清单读取失败");
   }
   if (res.status === 404 || res.status === 403) return emptyList();
   if (!res.ok) {

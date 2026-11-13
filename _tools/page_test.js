@@ -492,10 +492,14 @@ async function testAdmin() {
   var editCard = editBtn.closest(".admin-item");
   ok("点编辑 → 卡片进入编辑态", editCard.classList.contains("is-editing"));
   var editForm = editCard.querySelector(".admin-edit");
+  /* v3.0.0：编辑表单带「所属活动」下拉，可给已发布作品补挂/取消挂靠 */
+  var evSel = editForm.querySelector('[name="event_id"]');
+  ok("编辑表单含所属活动下拉（含进行中活动）", !!evSel && /秋季外拍/.test(evSel.textContent) && !!evSel.querySelector('option[value=""]'), evSel ? evSel.textContent.slice(0, 60) : "no select");
   editForm.querySelector('[name="title"]').value = "改后的标题";
   editForm.dispatchEvent(new dom.window.Event("submit", { cancelable: true, bubbles: true }));
   await new Promise(function (r) { setTimeout(r, 80); });
   ok("编辑表单提交 → 请求 update 动作", callLog.some(function (b) { return b && b.action === "update" && b.title === "改后的标题"; }), JSON.stringify(callLog));
+  ok("编辑提交携带 event_id（补挂链路打通）", callLog.some(function (b) { return b && b.action === "update" && Object.prototype.hasOwnProperty.call(b, "event_id"); }), JSON.stringify(callLog).slice(0, 120));
 
   /* 下架 */
   callLog.length = 0;

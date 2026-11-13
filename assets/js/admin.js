@@ -143,11 +143,24 @@
     catch (e) { return ""; }
   }
 
+  function eventOptions(current) {
+    var opts = '<option value="">不参与活动（仅作品集）</option>';
+    (data.events || []).forEach(function (e) {
+      var st = e.status === "published" ? "进行中" : e.status === "archived" ? "往期" : "草稿";
+      opts += '<option value="' + esc(e.id) + '"' +
+        (String(current || "") === String(e.id) ? " selected" : "") + ">" +
+        esc(e.title) + "（" + st + "）</option>";
+    });
+    return opts;
+  }
+
   function editForm(p) {
     return '<form class="admin-edit">' +
       '<input class="admin-edit__t" name="title" type="text" maxlength="50" value="' + esc(p.title) + '" placeholder="标题" required>' +
       '<input class="admin-edit__a" name="author" type="text" maxlength="30" value="' + esc(p.author || "") + '" placeholder="署名（可留空）">' +
       '<select class="admin-edit__c" name="category">' + catOptions(p.category) + "</select>" +
+      /* v3.0.0：所属活动——投稿时漏选活动，干部可在这里补挂/取消挂靠 */
+      '<select class="admin-edit__c" name="event_id" title="所属活动">' + eventOptions(p.event_id) + "</select>" +
       /* v2.9.3：拍摄日期上限今天（服务端同样拒绝未来日期） */
       '<input class="admin-edit__d" name="shot_date" type="date" max="' + todayCN() + '" value="' + esc(p.shot_date || "") + '">' +
       '<div class="admin-edit__ops">' +
@@ -758,12 +771,14 @@
       e.preventDefault();
       var card = form.closest(".admin-item");
       var id = card ? card.getAttribute("data-id") : null;
+      var evSel = form.querySelector('[name="event_id"]');
       api("update", {
         id: id,
         title: form.querySelector('[name="title"]').value.trim(),
         author: form.querySelector('[name="author"]').value.trim(),
         category: form.querySelector('[name="category"]').value,
-        shot_date: form.querySelector('[name="shot_date"]').value
+        shot_date: form.querySelector('[name="shot_date"]').value,
+        event_id: evSel ? evSel.value : "" /* v3.0.0：补挂/取消活动归属 */
       }).then(function () {
         showMsg(panelMsg, "已保存修改。", "is-ok");
         return load();

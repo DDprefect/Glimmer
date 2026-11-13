@@ -65,13 +65,12 @@ function normalize(v) {
 
 /* 读取配置。404/403 = 还没保存过 → null（前端走内置默认） */
 async function read() {
-  var s = cos.sign("get", KEY, 60);
   var res;
   try {
-    res = await fetch(s.url, { method: "GET" });
+    /* v3.0.0：走统一多域名 + 网络重试请求层 */
+    res = await cos.request("get", KEY, { method: "GET" }, null, "胶囊配置读取失败");
   } catch (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("胶囊配置读取失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
+    throw new Error(e.message || "胶囊配置读取失败");
   }
   if (res.status === 404 || res.status === 403) return null;
   if (!res.ok) throw new Error("胶囊配置读取失败（HTTP " + res.status + "）");

@@ -66,15 +66,13 @@ async function deleteCosFiles(rows) {
     var key = cos.keyFromUrl(rows[i].file_url);
     if (!key) continue;
     try {
-      var signed = cos.sign("delete", key, 600);
-      var del = await fetch(signed.url, { method: "DELETE" });
+      var del = await cos.request("delete", key, { method: "DELETE" }, null, "存储删除失败");
       if (del.ok || del.status === 204) deleted++;
     } catch (e) {
       /* 单文件失败不阻塞其余 */
     }
     try {
-      var oSigned = cos.sign("delete", watermarkLib.originalKeyOf(key), 600);
-      await fetch(oSigned.url, { method: "DELETE" });
+      await cos.request("delete", watermarkLib.originalKeyOf(key), { method: "DELETE" }, null, "原图删除失败");
     } catch (e2) {
       /* 同上：原图副本删不掉只留私有目录里，不阻塞主流程 */
     }
@@ -303,6 +301,22 @@ module.exports = async function (req, res) {
         return http.json(req, res, 400, { ok: false, error: "拍摄日期不能晚于今天" });
       }
       if (shot_date) patch.shot_date = shot_date;
+      /* v3.0.0：活动归属补挂——投稿时漏选活动的已发布作品可在这里补挂。
+         不传该字段表示不改动（分类快切只发 category，不能把活动清掉）。 */
+      if (body.event_id !== undefined) {
+        var evRaw = String(body.event_id == null ? "" : body.event_id).trim();
+        if (evRaw === "" || evRaw === "0" || evRaw === "null") {
+          patch.event_id = null;
+        } else if (/^\d+$/.test(evRaw)) {
+          var evChk = await db.events.byId(evRaw);
+          if (!evChk || !evChk.length) {
+            return http.json(req, res, 400, { ok: false, error: "所选活动不存在" });
+          }
+          patch.event_id = Number(evRaw);
+        } else {
+          return http.json(req, res, 400, { ok: false, error: "活动标识不合法" });
+        }
+      }
       if (!Object.keys(patch).length) {
         return http.json(req, res, 400, { ok: false, error: "没有要修改的内容" });
       }

@@ -212,6 +212,10 @@
         flow.hidden = true;
         showMsg("提交成功！作品已进入待审核队列。", "is-ok");
         form.reset();
+        /* v3.0.0：投稿成功后清空活动选择缓存，下张照片需显式重选，避免误挂 */
+        try { sessionStorage.removeItem("glimmer:eventId"); } catch (eStore) {}
+        var evSel0 = $("#f-event");
+        if (evSel0) evSel0.dispatchEvent(new Event("change"));
         fileName.textContent = "未选择文件";
         fileName.classList.remove("is-picked");
         done.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -294,18 +298,32 @@
     });
   }
 
-  /* ---------------- 活动参与入口（v2.7.0） ----------------
+  /* ---------------- 活动参与入口（v2.7.0 / v3.0.0 加固） ----------------
      活动期间：分类栏下方出现「参与活动」下拉；归档/无活动时整块消失。
-     选中的活动随投稿提交（eventId），照片审核通过后会同时出现在该活动页。 */
+     v3.0.0：选择状态存 sessionStorage——上传失败后刷新页面重试时，
+     下拉会被浏览器重置成「不参与活动」，导致照片进了作品集却没进活动页；
+     这里恢复上次选择，并把当前归属写成可见提示。 */
+  var EV_STORE = "glimmer:eventId";
+  function readEvStore() { try { return sessionStorage.getItem(EV_STORE) || ""; } catch (e) { return ""; } }
+  function writeEvStore(v) { try { v ? sessionStorage.setItem(EV_STORE, v) : sessionStorage.removeItem(EV_STORE); } catch (e) {} }
+
   function loadEvents() {
     var wrap = $("#f-event-wrap");
     var sel = $("#f-event");
     if (!wrap || !sel) return;
+    function updateHint() {
+      var hint = $("#f-event-hint");
+      if (!hint) return;
+      var opt = sel.options[sel.selectedIndex];
+      hint.textContent = sel.value
+        ? "✓ 这张照片将参与「" + (opt ? opt.textContent : "") + "」，审核通过后出现在该活动页。投稿成功后本选择会清空。"
+        : "未选活动：这张照片只进作品集，不会出现在活动页。";
+    }
     fetch("api/events")
       .then(function (r) { return r.json(); })
       .then(function (j) {
         var current = (j && j.ok && j.current) || [];
-        if (!current.length) { wrap.hidden = true; return; }
+        if (!current.length) { wrap.hidden = true; writeEvStore(""); return; }
         current.forEach(function (e) {
           var opt = document.createElement("option");
           opt.value = e.id;
@@ -313,10 +331,18 @@
           sel.appendChild(opt);
         });
         wrap.hidden = false;
-        var hint = $("#f-event-hint");
-        if (hint) hint.textContent = "正在参与：" + current.map(function (e) { return e.title; }).join("、");
+        /* 恢复上次选择（仅限仍是进行中的活动，避免挂到已归档活动） */
+        var saved = readEvStore();
+        if (saved && current.some(function (e) { return String(e.id) === String(saved); })) sel.value = saved;
+        else writeEvStore("");
+        updateHint();
       })
-      .catch(function () { wrap.hidden = true; /* 接口挂了就当没有活动，不挡投稿 */ });
+      .catch(function () {
+        wrap.hidden = false;
+        var hint = $("#f-event-hint");
+        if (hint) hint.textContent = "活动列表暂时没加载出来：可正常投稿，之后请干部在后台把作品补挂到活动。";
+      });
+    sel.addEventListener("change", function () { writeEvStore(sel.value); updateHint(); });
   }
   /* v2.9.3：拍摄日期永远不能超过今天——date 输入框上限设为北京时间的今天，
      服务端（api/upload.js）同样拒绝未来日期，双保险。 */

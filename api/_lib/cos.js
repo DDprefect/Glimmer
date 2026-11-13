@@ -17,14 +17,20 @@ var crypto = require("crypto");
    不改变正常链路行为，仅消除这一整类连接超时。 */
 try { require("dns").setDefaultResultOrder("ipv4first"); } catch (eDns) {}
 
+/* 写/读请求的候选接入域名：默认域名 → 全球加速域名。
+   v2.9.5 起写操作已回退，v3.0.0 把 HEAD/COPY/POST/DELETE/GET 全部纳入。 */
+function accessHosts() {
+  var c = cfg();
+  return [hostOf(), c.Bucket + ".cos.accelerate.myqcloud.com"];
+}
+
 /* v2.9.5：写对象（图片/CSV/水印素材）统一入口。
    接入域名候选：默认域名 → COS 全球加速域名。默认域名跨境连接失败时，
    自动用全球加速域名重新签名并重试（PUT 同 key 幂等覆盖，重试安全）。
    仅网络层失败或 5xx 才换域名；4xx 是签名/权限/配置问题，立即返回。
    全球加速需在 COS 控制台开启；未开启时该域名会快速返回 4xx，无害。 */
 async function putObject(key, buf, contentType) {
-  var c = cfg();
-  var hosts = [hostOf(), c.Bucket + ".cos.accelerate.myqcloud.com"];
+  var hosts = accessHosts();
   var headers = contentType ? { "Content-Type": contentType } : undefined;
   var lastErr = null;
   var lastRes = null;
@@ -43,6 +49,29 @@ async function putObject(key, buf, contentType) {
   var code = lastErr && lastErr.cause && (lastErr.cause.code || lastErr.cause.message);
   throw new Error("存储网络连接失败" +
     (code ? "（" + code + "）" : "：" + ((lastErr && lastErr.message) || "fetch failed")));
+}
+
+/* v3.0.0：所有「非 PUT 写」的 COS 请求统一入口（HEAD/COPY/POST/DELETE/GET）。
+   之前 objectExists / copyObject / imageProcess 各自裸 fetch，跨境连接超时
+   就直接失败——这正是后台「打水印」报「存储对象查询失败」的原因。
+   每个候选域名单独签名（Host 签入，必须与 URL 一致），网络错误经
+   fetchWithRetry 重试，仍失败或 5xx 才换下一个域名；4xx 立即返回。 */
+async function request(method, key, opts, extraHeaders, label, urlSuffix) {
+  var hosts = accessHosts();
+  var lastErr = null;
+  var lastRes = null;
+  for (var i = 0; i < hosts.length; i++) {
+    var s = sign(method, key, 600, extraHeaders || null, hosts[i]);
+    try {
+      var res = await fetchWithRetry(s.url + (urlSuffix || ""), opts, label || "存储请求失败");
+      if (res.status < 500) return res;
+      lastRes = res;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastRes) return lastRes;
+  throw lastErr || new Error(label || "存储请求失败");
 }
 
 /* 跨境链路（Vercel hkg1 → 广州 COS）偶发 UND_ERR_CONNECT_TIMEOUT。
@@ -225,11 +254,7 @@ function errorFromRes(res) {
 
 /* 对象是否存在（签名 HEAD）。桶策略只拒匿名，不影响服务端自访 */
 function objectExists(key) {
-  var s = sign("head", key, 600);
-  return fetch(s.url, { method: "HEAD" }).catch(function (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("存储对象查询失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
-  }).then(function (res) {
+  return request("head", key, { method: "HEAD" }, null, "存储对象查询失败").then(function (res) {
     if (res.ok) return true;
     if (res.status === 404) return false;
     return errorFromRes(res).then(function () { return false; });
@@ -238,10 +263,9 @@ function objectExists(key) {
 
 /* 复制对象。x-cos-copy-source 需 URL 编码、必须签入签名且真实随请求携带 */
 function copyObject(fromKey, toKey) {
-  var c = cfg();
-  var source = camSafeUrlEncode(c.Bucket + ".cos." + c.Region + ".myqcloud.com/" + fromKey);
-  var s = sign("put", toKey, 600, { "x-cos-copy-source": source });
-  return fetchWithRetry(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }, "存储复制失败")
+  var source = camSafeUrlEncode(hostOf() + "/" + fromKey);
+  var headers = { "x-cos-copy-source": source };
+  return request("put", toKey, { method: "PUT", headers: headers }, headers, "存储复制失败")
     .then(function (res) {
       if (!res.ok) return errorFromRes(res);
       return true;
@@ -268,11 +292,10 @@ function imageProcess(srcKey, destKey, rule) {
       rule: rule
     }]
   });
-  var s = sign("post", srcKey, 600, { "Pic-Operations": pic });
-  return fetchWithRetry(s.url + "&image_process", {
+  return request("post", srcKey, {
     method: "POST",
     headers: { "Pic-Operations": pic }
-  }, "水印处理请求失败").then(function (res) {
+  }, { "Pic-Operations": pic }, "水印处理请求失败", "&image_process").then(function (res) {
     if (!res.ok) return errorFromRes(res);
     return res.json().catch(function () { return {}; });
   });
@@ -291,6 +314,8 @@ module.exports = {
   objectExists: objectExists,
   copyObject: copyObject,
   putObject: putObject,
+  request: request,
+  accessHosts: accessHosts,
   putBuffer: putBuffer,
   imageProcess: imageProcess
 };

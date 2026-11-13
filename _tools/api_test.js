@@ -1226,6 +1226,24 @@ async function testApi() {
   var draftId = String(r.json.id);
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_delete", id: draftId });
   ok("草稿可删除", r.status === 200 && r.json.ok);
+  /* ---------- v3.0.0：后台补挂活动归属 ---------- */
+  r = await call(P, "GET", "/api/photos");
+  var fixPid = (r.json.photos || [])[0] && r.json.photos[0].id;
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(fixPid), event_id: pubId });
+  ok("后台把已发布作品补挂到活动 → 200", r.status === 200, JSON.stringify(r.json));
+  r = await call(P, "GET", "/api/events?id=" + pubId);
+  ok("补挂后活动详情 works 出现该作品", (r.json.works || []).some(function (w) { return String(w.id) === String(fixPid); }), JSON.stringify((r.json.works || []).map(function (w) { return w.id; })));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(fixPid), category: "人像与视觉" });
+  ok("分类快切（不带 event_id）不误清活动归属", r.status === 200);
+  r = await call(P, "GET", "/api/events?id=" + pubId);
+  ok("分类快切后活动归属仍保留", (r.json.works || []).some(function (w) { return String(w.id) === String(fixPid); }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(fixPid), event_id: "" });
+  ok("取消挂靠 → 200", r.status === 200);
+  r = await call(P, "GET", "/api/events?id=" + pubId);
+  ok("取消挂靠后活动详情不再含该作品", !(r.json.works || []).some(function (w) { return String(w.id) === String(fixPid); }));
+  r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(fixPid), event_id: "99999" });
+  ok("挂到不存在的活动 → 400", r.status === 400);
+
   r = await call(P, "POST", "/api/admin", { password: "wrong", action: "event_save", title: "x" });
   ok("活动写操作需密码 → 401", r.status === 401);
   globalThis.fetch = realFetch;
