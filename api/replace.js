@@ -72,7 +72,7 @@ module.exports = async function (req, res) {
 
     /* 覆盖公开位 */
     var s1 = cos.sign("put", key, 600);
-    var put1 = await fetch(s1.url, { method: "PUT", body: buf, headers: { "Content-Type": "image/jpeg" } });
+    var put1 = await cos.fetchWithRetry(s1.url, { method: "PUT", body: buf, headers: { "Content-Type": "image/jpeg" } }, "图片写入存储失败");
     if (!put1.ok) throw new Error("图片写入存储失败（HTTP " + put1.status + "）");
 
     /* 私有原图副本若存在则同步覆盖——换图之后原图也必须是新图，否则
@@ -82,7 +82,7 @@ module.exports = async function (req, res) {
     try {
       if (await cos.objectExists(oKey)) {
         var s2 = cos.sign("put", oKey, 600);
-        var put2 = await fetch(s2.url, { method: "PUT", body: buf, headers: { "Content-Type": "image/jpeg" } });
+        var put2 = await cos.fetchWithRetry(s2.url, { method: "PUT", body: buf, headers: { "Content-Type": "image/jpeg" } }, "原图同步失败");
         originalSynced = put2.ok;
       }
     } catch (e2) {

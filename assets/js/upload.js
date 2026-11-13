@@ -225,7 +225,12 @@
         var cause = err && err.cause;
         var net = cause && (cause.code || cause.message)
           ? "［网络层：" + (cause.code || cause.message) + "］" : "";
-        showMsg(((err && err.message) || "提交失败，请稍后重试") + net +
+        /* v2.9.4：服务端已对跨境连接抖动自动重试一次；若仍失败，多为瞬时
+           链路问题，明确告诉同学「再点一次」比只说「请稍后重试」有用 */
+        var raw = (err && err.message) || "提交失败，请稍后重试";
+        var hint = /存储网络连接失败|connect timeout|ECONNRESET/i.test(raw)
+          ? "　别担心，照片没丢，稍等几秒再点一次「上传并提交」通常就成功了。" : "";
+        showMsg(raw + net + hint +
           "（页面地址：" + location.origin + "）", "is-err");
         msg.scrollIntoView({ behavior: "smooth", block: "center" });
       })

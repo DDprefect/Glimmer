@@ -25,11 +25,11 @@ function stampCN() {
    备份 CSV 含报名 PII，桶策略对 _backup/* 拒绝匿名读后，只有拿到签名链接才能下载） */
 async function putText(key, text) {
   var signed = cos.sign("put", key, 600);
-  var put = await fetch(signed.url, {
+  var put = await cos.fetchWithRetry(signed.url, {
     method: "PUT",
     body: Buffer.from(text, "utf8"),
     headers: { "Content-Type": "text/csv; charset=utf-8" }
-  });
+  }, "备份写入存储失败");
   if (!put.ok) {
     throw new Error("备份写入存储失败（HTTP " + put.status + "）");
   }

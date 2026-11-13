@@ -13,6 +13,32 @@
 
 var crypto = require("crypto");
 
+/* v2.9.4：跨境链路（Vercel hkg1 → 广州 COS）偶发 UND_ERR_CONNECT_TIMEOUT。
+   PUT/POST 写操作按同一 key 覆盖，天然幂等，可安全重试。
+   规则：① 只对「连接/网络层错误」重试 1 次，HTTP 4xx/5xx 是签名/权限/
+   服务端拒绝，直接交回调用方；② 不设整体超时——undici 自带 10s 连接
+   超时，额外整体超时反而会截断本可成功的大图上传；③ 最终失败带出底层
+   错误码（e.cause.code），排障口径不变。 */
+async function fetchWithRetry(url, opts, label) {
+  var attempts = 2;
+  var lastErr = null;
+  for (var i = 0; i < attempts; i++) {
+    try {
+      return await fetch(url, opts);
+    } catch (e) {
+      lastErr = e;
+      var code = String((e && e.cause && (e.cause.code || e.cause.message)) || "");
+      var msg = String((e && e.message) || "");
+      var retryable = /UND_ERR_CONNECT|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|UND_ERR_SOCKET|fetch failed/i.test(code + " " + msg);
+      if (!retryable || i >= attempts - 1) break;
+      await new Promise(function (r) { setTimeout(r, 300); });
+    }
+  }
+  var code2 = lastErr && lastErr.cause && (lastErr.cause.code || lastErr.cause.message);
+  throw new Error((label || "存储请求失败") +
+    (code2 ? "（" + code2 + "）" : "：" + ((lastErr && lastErr.message) || "fetch failed")));
+}
+
 /* 与 SDK camSafeUrlEncode 一致：encodeURIComponent 之外再编码 ! ' ( ) * */
 function camSafeUrlEncode(str) {
   return encodeURIComponent(str)
@@ -179,26 +205,22 @@ function copyObject(fromKey, toKey) {
   var c = cfg();
   var source = camSafeUrlEncode(c.Bucket + ".cos." + c.Region + ".myqcloud.com/" + fromKey);
   var s = sign("put", toKey, 600, { "x-cos-copy-source": source });
-  return fetch(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }).catch(function (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("存储复制失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
-  }).then(function (res) {
-    if (!res.ok) return errorFromRes(res);
-    return true;
-  });
+  return fetchWithRetry(s.url, { method: "PUT", headers: { "x-cos-copy-source": source } }, "存储复制失败")
+    .then(function (res) {
+      if (!res.ok) return errorFromRes(res);
+      return true;
+    });
 }
 
 /* 写入缓冲对象（如水印 logo 自举上传） */
 function putBuffer(key, buf, contentType) {
   var headers = contentType ? { "Content-Type": contentType } : null;
   var s = sign("put", key, 600, headers);
-  return fetch(s.url, { method: "PUT", body: buf, headers: headers || undefined }).catch(function (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("存储写入失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
-  }).then(function (res) {
-    if (!res.ok) return errorFromRes(res);
-    return true;
-  });
+  return fetchWithRetry(s.url, { method: "PUT", body: buf, headers: headers || undefined }, "存储写入失败")
+    .then(function (res) {
+      if (!res.ok) return errorFromRes(res);
+      return true;
+    });
 }
 
 /* 数据万象·云上图片持久化处理（POST image_process + Pic-Operations 头，需签入）。
@@ -214,13 +236,10 @@ function imageProcess(srcKey, destKey, rule) {
     }]
   });
   var s = sign("post", srcKey, 600, { "Pic-Operations": pic });
-  return fetch(s.url + "&image_process", {
+  return fetchWithRetry(s.url + "&image_process", {
     method: "POST",
     headers: { "Pic-Operations": pic }
-  }).catch(function (e) {
-    var code = e && e.cause && (e.cause.code || e.cause.message);
-    throw new Error("水印处理请求失败" + (code ? "（" + code + "）" : "：" + (e.message || "fetch failed")));
-  }).then(function (res) {
+  }, "水印处理请求失败").then(function (res) {
     if (!res.ok) return errorFromRes(res);
     return res.json().catch(function () { return {}; });
   });
@@ -229,6 +248,7 @@ function imageProcess(srcKey, destKey, rule) {
 module.exports = {
   camSafeUrlEncode: camSafeUrlEncode,
   obj2str: obj2str,
+  fetchWithRetry: fetchWithRetry,
   hostOf: hostOf,
   hostOfSafe: hostOfSafe,
   sign: sign,

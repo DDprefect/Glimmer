@@ -384,11 +384,18 @@ async function testApi() {
   var cosCalls = [];
   var cosObjects = new Set();
   var cosBodies = new Map(); /* v2.6.0：静态作品清单要能「写进再读回」 */
+  var cosFailOnce = false;  /* v2.9.4：模拟一次跨境连接超时，验证自动重试 */
   globalThis.fetch = function (url, opts) {
     var u = String(url);
     var method = ((opts && opts.method) || "GET").toUpperCase();
     if (u.indexOf(process.env.SUPABASE_URL) === 0) return realFetch(url, opts);
     if (u.indexOf("myqcloud.com") !== -1) {
+      if (cosFailOnce && method === "PUT") {
+        cosFailOnce = false;
+        var to = new Error("connect timeout");
+        to.cause = { code: "UND_ERR_CONNECT_TIMEOUT" };
+        return Promise.reject(to);
+      }
       cosCalls.push({ url: u, method: method, headers: (opts && opts.headers) || {}, body: opts && opts.body });
       var path = u.split("?")[0];
       if (method === "HEAD") {
@@ -1115,6 +1122,23 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(futureId), shot_date: "2099-12-31" });
   ok("后台编辑拍摄日期晚于今天 → 400", r.status === 400 && /晚于今天/.test(r.json.error || ""), JSON.stringify(r.json));
 
+  /* ---------- v2.9.4：COS 跨境连接超时自动重试 ---------- */
+  cosFailOnce = true;
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("超时重试投稿") + "&shot_date=2026-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("COS 首次 UND_ERR_CONNECT_TIMEOUT → 自动重试后投稿成功", r.status === 200 && !cosFailOnce, JSON.stringify(r.json).slice(0, 120));
+  cosFailOnce = true;
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("超时重试再次") + "&shot_date=2026-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("重试逻辑可重复生效（不污染后续请求）", r.status === 200 && !cosFailOnce);
+
+  rl._buckets.clear(); /* 前面日期/重试断言用掉了 upload 配额 */
+  /* 前面日期/重试断言累积的稿件会撞 upload 全局熔断（DB 近 10min 计数），
+     把测试期新建的行标为 2 小时前，模拟「历史稿件」 */
+  mock.state.photos.forEach(function (p) {
+    if (p.created_at && new Date(p.created_at).getTime() > Date.now() - 10 * 60 * 1000) {
+      p.created_at = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+    }
+  });
+
   /* ---------- v2.7.0：活动系统 ---------- */
   r = await call(P, "GET", "/api/events");
   ok("活动系统初装 → 空列表（表未建/无活动降级）", r.status === 200 && r.json.ok && r.json.current.length === 0 && r.json.past.length === 0, JSON.stringify(r.json));
@@ -1161,7 +1185,7 @@ async function testApi() {
   r = await callRaw(P, "POST", evQs, fakeJpeg(), { "Content-Type": "application/octet-stream" });
   ok("活动投稿 → 入库带 event_id", r.status === 200 && mock.state.photos.some(function (p) { return p.title === "活动作品" && p.event_id === Number(evId); }), JSON.stringify(r.json).slice(0, 120));
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("坏活动") + "&eventId=99999", fakeJpeg(), { "Content-Type": "application/octet-stream" });
-  ok("投稿挂不存在活动 → 400", r.status === 400);
+  ok("投稿挂不存在活动 → 400", r.status === 400, r.status + " " + JSON.stringify(r.json).slice(0, 140));
 
   /* 归档：报名关闭、投稿拒绝、详情保留 */
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "event_archive", id: evId });
@@ -1172,7 +1196,7 @@ async function testApi() {
   r = await call(P, "POST", "/api/register?type=event", { eventId: evId, name: "小刚", contact: "QQ 780" });
   ok("归档后报名 → 拒绝", r.status === 400, JSON.stringify(r.json));
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("晚了") + "&eventId=" + evId, fakeJpeg(), { "Content-Type": "application/octet-stream" });
-  ok("归档后投稿挂靠 → 拒绝", r.status === 400);
+  ok("归档后投稿挂靠 → 拒绝", r.status === 400, r.status + " " + JSON.stringify(r.json).slice(0, 140));
   r = await call(P, "GET", "/api/events?id=" + evId);
   ok("归档活动详情仍可访问（回顾页）且作品在", r.status === 200 && r.json.event.status === "archived");
 
