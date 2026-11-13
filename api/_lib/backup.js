@@ -24,12 +24,7 @@ function stampCN() {
 /* 写一个文本文件到 COS；返回限时预签名 GET 地址（v2.0.12 起不再返回公有读地址：
    备份 CSV 含报名 PII，桶策略对 _backup/* 拒绝匿名读后，只有拿到签名链接才能下载） */
 async function putText(key, text) {
-  var signed = cos.sign("put", key, 600);
-  var put = await cos.fetchWithRetry(signed.url, {
-    method: "PUT",
-    body: Buffer.from(text, "utf8"),
-    headers: { "Content-Type": "text/csv; charset=utf-8" }
-  }, "备份写入存储失败");
+  var put = await cos.putObject(key, Buffer.from(text, "utf8"), "text/csv; charset=utf-8");
   if (!put.ok) {
     throw new Error("备份写入存储失败（HTTP " + put.status + "）");
   }

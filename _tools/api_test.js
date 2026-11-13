@@ -1122,6 +1122,14 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(futureId), shot_date: "2099-12-31" });
   ok("后台编辑拍摄日期晚于今天 → 400", r.status === 400 && /晚于今天/.test(r.json.error || ""), JSON.stringify(r.json));
 
+  /* ---------- v2.9.5：写操作备用接入域名 + 链路诊断 ---------- */
+  cosFailOnce = true;
+  cosCalls.length = 0;
+  r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("备用域名回退") + "&shot_date=2026-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });
+  ok("默认域名连接超时 → 自动回退全球加速域名写成功", r.status === 200 && cosCalls.some(function (c) { return c.method === "PUT" && c.url.indexOf("cos.accelerate.myqcloud.com") !== -1; }), cosCalls.map(function (c) { return c.url.slice(8, 60); }).join(" | "));
+  r = await call(P, "GET", "/api/static-works?type=cosdiag");
+  ok("存储链路诊断端点返回两个接入域名探测结果", r.status === 200 && r.json.ok && r.json.probes && r.json.probes.length === 2, JSON.stringify(r.json).slice(0, 160));
+
   /* ---------- v2.9.4：COS 跨境连接超时自动重试 ---------- */
   cosFailOnce = true;
   r = await callRaw(P, "POST", "/api/upload?category=" + encodeURIComponent("校园纪实") + "&title=" + encodeURIComponent("超时重试投稿") + "&shot_date=2026-01-01", fakeJpeg(), { "Content-Type": "application/octet-stream" });

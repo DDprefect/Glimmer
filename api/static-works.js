@@ -20,6 +20,7 @@
 var http = require("./_lib/http");
 var staticworks = require("./_lib/staticworks");
 var pillsLib = require("./_lib/pills");
+var cosLib = require("./_lib/cos");
 
 module.exports = async function (req, res) {
   if (req.method === "OPTIONS") return http.preflight(req, res);
@@ -27,6 +28,28 @@ module.exports = async function (req, res) {
 
   var typeName = "";
   try { typeName = new URL(req.url, "http://x").searchParams.get("type") || ""; } catch (eUrl) {}
+
+  /* ---- v2.9.5：存储链路诊断（仅返回连接耗时/状态码，不含任何密钥） ----
+     排查 Vercel 出口到 COS 的连接问题时由干部调用；问题解决后可删。 */
+  if (typeName === "cosdiag") {
+    var host = cosLib.hostOfSafe();
+    var accel = process.env.COS_BUCKET ? process.env.COS_BUCKET + ".cos.accelerate.myqcloud.com" : "";
+    var hosts = [host, accel].filter(Boolean);
+    var probes = [];
+    for (var i = 0; i < hosts.length; i++) {
+      var t0 = Date.now();
+      try {
+        var rr = await fetch("https://" + hosts[i] + "/", {
+          method: "HEAD",
+          signal: AbortSignal.timeout(8000)
+        });
+        probes.push({ host: hosts[i], status: rr.status, ms: Date.now() - t0 });
+      } catch (e) {
+        probes.push({ host: hosts[i], error: String((e && e.cause && e.cause.code) || (e && e.message) || "unknown"), ms: Date.now() - t0 });
+      }
+    }
+    return http.json(req, res, 200, { ok: true, region: process.env.VERCEL_REGION || "", probes: probes });
+  }
 
   /* ---- 胶囊配置分支（/api/pills → ?type=pills） ---- */
   if (typeName === "pills") {

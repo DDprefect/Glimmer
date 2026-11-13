@@ -12,15 +12,48 @@
    ========================================================================== */
 
 var crypto = require("crypto");
+/* v2.9.5：undici 在 DNS 同时返回 AAAA/A 时可能优先走 IPv6，
+   跨境无 IPv6 路由会表现为 UND_ERR_CONNECT_TIMEOUT。强制 IPv4 优先，
+   不改变正常链路行为，仅消除这一整类连接超时。 */
+try { require("dns").setDefaultResultOrder("ipv4first"); } catch (eDns) {}
 
-/* v2.9.4：跨境链路（Vercel hkg1 → 广州 COS）偶发 UND_ERR_CONNECT_TIMEOUT。
+/* v2.9.5：写对象（图片/CSV/水印素材）统一入口。
+   接入域名候选：默认域名 → COS 全球加速域名。默认域名跨境连接失败时，
+   自动用全球加速域名重新签名并重试（PUT 同 key 幂等覆盖，重试安全）。
+   仅网络层失败或 5xx 才换域名；4xx 是签名/权限/配置问题，立即返回。
+   全球加速需在 COS 控制台开启；未开启时该域名会快速返回 4xx，无害。 */
+async function putObject(key, buf, contentType) {
+  var c = cfg();
+  var hosts = [hostOf(), c.Bucket + ".cos.accelerate.myqcloud.com"];
+  var headers = contentType ? { "Content-Type": contentType } : undefined;
+  var lastErr = null;
+  var lastRes = null;
+  for (var i = 0; i < hosts.length; i++) {
+    var s = sign("put", key, 600, null, hosts[i]);
+    try {
+      var res = await fetch(s.url, { method: "PUT", body: buf, headers: headers });
+      if (res.ok) return res;
+      if (res.status < 500) return res; /* 4xx 换域名也没用 */
+      lastRes = res;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  if (lastRes) return lastRes;
+  var code = lastErr && lastErr.cause && (lastErr.cause.code || lastErr.cause.message);
+  throw new Error("存储网络连接失败" +
+    (code ? "（" + code + "）" : "：" + ((lastErr && lastErr.message) || "fetch failed")));
+}
+
+/* 跨境链路（Vercel hkg1 → 广州 COS）偶发 UND_ERR_CONNECT_TIMEOUT。
    PUT/POST 写操作按同一 key 覆盖，天然幂等，可安全重试。
    规则：① 只对「连接/网络层错误」重试 1 次，HTTP 4xx/5xx 是签名/权限/
    服务端拒绝，直接交回调用方；② 不设整体超时——undici 自带 10s 连接
    超时，额外整体超时反而会截断本可成功的大图上传；③ 最终失败带出底层
    错误码（e.cause.code），排障口径不变。 */
 async function fetchWithRetry(url, opts, label) {
-  var attempts = 2;
+  var attempts = 3;
+  var waits = [300, 800];
   var lastErr = null;
   for (var i = 0; i < attempts; i++) {
     try {
@@ -31,7 +64,7 @@ async function fetchWithRetry(url, opts, label) {
       var msg = String((e && e.message) || "");
       var retryable = /UND_ERR_CONNECT|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|UND_ERR_SOCKET|fetch failed/i.test(code + " " + msg);
       if (!retryable || i >= attempts - 1) break;
-      await new Promise(function (r) { setTimeout(r, 300); });
+      await new Promise(function (r) { setTimeout(r, waits[i] || 800); });
     }
   }
   var code2 = lastErr && lastErr.cause && (lastErr.cause.code || lastErr.cause.message);
@@ -100,7 +133,10 @@ function hostOfSafe() {
    extraHeaders: 需要一并签入的请求头（如 x-cos-copy-source / Pic-Operations /
    Content-Type）——COS 要求请求里出现的 x-cos-* 与参与处理运算的头必须进签名。
    返回 { url, host, key }，url 已带签名参数，可直接 fetch。 */
-function sign(method, key, expiresSeconds, extraHeaders) {
+/* v2.9.5：hostOverride 允许对「写操作」改用其它 COS 接入域名
+   （默认域名跨境不通时回退到全球加速域名），签名的 Host 头与 URL 同步。
+   不传时行为与原来完全一致，公开读 URL 也不受影响。 */
+function sign(method, key, expiresSeconds, extraHeaders, hostOverride) {
   var c = cfg();
   var m = String(method || "put").toLowerCase();
   var now = Math.round(Date.now() / 1000) - 1;
@@ -108,7 +144,7 @@ function sign(method, key, expiresSeconds, extraHeaders) {
   var keyTime = now + ";" + exp;
 
   // 与 SDK 一致：签入 Host，防跨桶挪用；附加头按调用方需求合并
-  var headers = { Host: c.Bucket + ".cos." + c.Region + ".myqcloud.com" };
+  var headers = { Host: hostOverride || (c.Bucket + ".cos." + c.Region + ".myqcloud.com") };
   if (extraHeaders) {
     Object.keys(extraHeaders).forEach(function (k) {
       if (extraHeaders[k] != null) headers[k] = String(extraHeaders[k]);
@@ -214,13 +250,10 @@ function copyObject(fromKey, toKey) {
 
 /* 写入缓冲对象（如水印 logo 自举上传） */
 function putBuffer(key, buf, contentType) {
-  var headers = contentType ? { "Content-Type": contentType } : null;
-  var s = sign("put", key, 600, headers);
-  return fetchWithRetry(s.url, { method: "PUT", body: buf, headers: headers || undefined }, "存储写入失败")
-    .then(function (res) {
-      if (!res.ok) return errorFromRes(res);
-      return true;
-    });
+  return putObject(key, buf, contentType).then(function (res) {
+    if (!res.ok) return errorFromRes(res);
+    return true;
+  });
 }
 
 /* 数据万象·云上图片持久化处理（POST image_process + Pic-Operations 头，需签入）。
@@ -257,6 +290,7 @@ module.exports = {
   keyFromUrl: keyFromUrl,
   objectExists: objectExists,
   copyObject: copyObject,
+  putObject: putObject,
   putBuffer: putBuffer,
   imageProcess: imageProcess
 };
