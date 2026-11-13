@@ -51,6 +51,53 @@ module.exports = async function (req, res) {
     return http.json(req, res, 200, { ok: true, region: process.env.VERCEL_REGION || "", probes: probes });
   }
 
+  /* ---- v3.0.1：水印链路分步诊断（写小探测对象→HEAD→复制→清理） ----
+     仅返回每步耗时/状态，不含密钥；用于判断后台打水印卡在哪一步。 */
+  if (typeName === "cosops") {
+    var steps = [];
+    var pk = "_config/__cosprobe-" + Date.now() + ".txt";
+    var ck = pk + ".copy";
+    async function probe(name, fn) {
+      var t0 = Date.now();
+      try {
+        var v = await fn();
+        steps.push({ name: name, ok: true, ms: Date.now() - t0, value: String(v) });
+      } catch (e) {
+        steps.push({ name: name, ok: false, ms: Date.now() - t0, error: String((e && e.message) || e) });
+      }
+    }
+    await probe("put", function () {
+      return cosLib.putObject(pk, Buffer.from("probe", "utf8"), "text/plain").then(function (r) { return r.status; });
+    });
+    await probe("head", function () { return cosLib.objectExists(pk); });
+    await probe("copy", function () { return cosLib.copyObject(pk, ck); });
+    await probe("delete", function () {
+      return cosLib.request("delete", pk, { method: "DELETE" }, null, "探测清理").then(function (r) { return r.status; });
+    });
+    await probe("deleteCopy", function () {
+      return cosLib.request("delete", ck, { method: "DELETE" }, null, "探测清理").then(function (r) { return r.status; });
+    });
+    /* 附带 ci=1 时，额外探测数据万象持久化处理（水印链路最容易慢的一步） */
+    var wantCi = false;
+    try { wantCi = new URL(req.url, "http://x").searchParams.get("ci") === "1"; } catch (eCi) {}
+    if (wantCi) {
+      var png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==", "base64");
+      var ik = "_config/__cosprobe-" + Date.now() + ".png";
+      var ok = "_config/__cosprobe-" + Date.now() + "-out.png";
+      await probe("putPng", function () {
+        return cosLib.putObject(ik, png, "image/png").then(function (r) { return r.status; });
+      });
+      await probe("ci", function () { return cosLib.imageProcess(ik, ok, "imageMogr2/thumbnail/2x2"); });
+      await probe("deletePng", function () {
+        return cosLib.request("delete", ik, { method: "DELETE" }, null, "探测清理").then(function (r) { return r.status; });
+      });
+      await probe("deleteOut", function () {
+        return cosLib.request("delete", ok, { method: "DELETE" }, null, "探测清理").then(function (r) { return r.status; });
+      });
+    }
+    return http.json(req, res, 200, { ok: true, region: process.env.VERCEL_REGION || "", steps: steps });
+  }
+
   /* ---- 胶囊配置分支（/api/pills → ?type=pills） ---- */
   if (typeName === "pills") {
     try {

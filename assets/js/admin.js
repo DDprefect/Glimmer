@@ -72,7 +72,19 @@
         err.unauthorized = true;
         throw err;
       }
-      return r.json().then(function (j) {
+      /* v3.0.1：平台错误页（函数超时/崩溃）返回的是 HTML/纯文本，
+         直接 r.json() 会抛 "Unexpected token 'A'..."，把真正原因藏起来。
+         文本优先 + 尽力解析 JSON，非 JSON 时把平台错误文本亮出来。 */
+      var textP = typeof r.text === "function"
+        ? r.text()
+        : r.json().then(function (j) { return JSON.stringify(j); }); /* 兼容测试桩 */
+      return textP.then(function (text) {
+        var j = null;
+        try { j = JSON.parse(text); } catch (eParse) {}
+        if (!j) {
+          throw new Error("服务端返回非 JSON（HTTP " + r.status + "）：" +
+            String(text || "").replace(/\s+/g, " ").slice(0, 160) + "　［多为函数超时，稍后重试；若持续失败请联系干部］");
+        }
         if (!r.ok || !j.ok) throw new Error(j.error || "操作失败（HTTP " + r.status + "）");
         return j;
       });

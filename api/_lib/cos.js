@@ -60,10 +60,13 @@ async function request(method, key, opts, extraHeaders, label, urlSuffix) {
   var hosts = accessHosts();
   var lastErr = null;
   var lastRes = null;
+  /* CI 持久化处理（post image_process）本身可能较慢，给 18s；其余小请求 9s。
+     两个域名最坏约 36s 内收敛，且超时即换域名，不再把 30s 函数预算吃光。 */
+  var timeoutMs = String(method).toLowerCase() === "post" ? 18000 : 9000;
   for (var i = 0; i < hosts.length; i++) {
     var s = sign(method, key, 600, extraHeaders || null, hosts[i]);
     try {
-      var res = await fetchWithRetry(s.url + (urlSuffix || ""), opts, label || "存储请求失败");
+      var res = await fetchWithRetry(s.url + (urlSuffix || ""), opts, label || "存储请求失败", timeoutMs);
       if (res.status < 500) return res;
       lastRes = res;
     } catch (e) {
@@ -80,13 +83,17 @@ async function request(method, key, opts, extraHeaders, label, urlSuffix) {
    服务端拒绝，直接交回调用方；② 不设整体超时——undici 自带 10s 连接
    超时，额外整体超时反而会截断本可成功的大图上传；③ 最终失败带出底层
    错误码（e.cause.code），排障口径不变。 */
-async function fetchWithRetry(url, opts, label) {
+async function fetchWithRetry(url, opts, label, timeoutMs) {
   var attempts = 3;
   var waits = [300, 800];
   var lastErr = null;
   for (var i = 0; i < attempts; i++) {
     try {
-      return await fetch(url, opts);
+      /* 单次请求显式超时：非 PUT 的 HEAD/COPY/POST/GET/DELETE 都是小请求，
+         卡住时必须及时放行给「换接入域名」而不是耗尽 Serverless 函数预算。
+         大图上传走 putObject，不受这里影响。 */
+      var o = timeoutMs ? Object.assign({}, opts, { signal: AbortSignal.timeout(timeoutMs) }) : opts;
+      return await fetch(url, o);
     } catch (e) {
       lastErr = e;
       var code = String((e && e.cause && (e.cause.code || e.cause.message)) || "");

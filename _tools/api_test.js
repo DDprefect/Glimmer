@@ -1122,6 +1122,9 @@ async function testApi() {
   r = await call(P, "POST", "/api/admin", { password: "glimmer2026", action: "update", id: String(futureId), shot_date: "2099-12-31" });
   ok("后台编辑拍摄日期晚于今天 → 400", r.status === 400 && /晚于今天/.test(r.json.error || ""), JSON.stringify(r.json));
 
+  /* ---------- v3.0.1：水印链路分步诊断 ---------- */
+  r = await call(P, "GET", "/api/static-works?type=cosops");
+  ok("水印链路分步诊断返回 5 步且首步写入成功", r.status === 200 && r.json.ok && r.json.steps && r.json.steps.length === 5 && r.json.steps[0].ok === true, JSON.stringify(r.json.steps || []).slice(0, 180));
   /* ---------- v2.9.5：写操作备用接入域名 + 链路诊断 ---------- */
   cosFailOnce = true;
   cosCalls.length = 0;

@@ -87,8 +87,14 @@ function originalKeyOf(publicKey) {
    校验自身出错（读不到/桩数据）则跳过，不阻塞主流程。 */
 async function verifyProcessed(publicKey, originalKey) {
   try {
-    var aRes = await fetch(cos.publicUrl(publicKey));
-    var bRes = await fetch(cos.signedGetUrl(originalKey, 300));
+    /* 两个读取并行 + 各自 6s 超时：校验属可选质量保证，链路慢时直接跳过，
+       绝不能把 Serverless 函数的执行预算耗在这里（v3.0.1 平台超时事故） */
+    var sig = { signal: AbortSignal.timeout(6000) };
+    var pair = await Promise.all([
+      fetch(cos.publicUrl(publicKey), sig),
+      fetch(cos.signedGetUrl(originalKey, 300), sig)
+    ]);
+    var aRes = pair[0], bRes = pair[1];
     if (!aRes.ok || !bRes.ok || !aRes.arrayBuffer || !bRes.arrayBuffer) return;
     var a = Buffer.from(await aRes.arrayBuffer());
     var b = Buffer.from(await bRes.arrayBuffer());
@@ -105,16 +111,31 @@ async function verifyProcessed(publicKey, originalKey) {
    返回 { ok, originalKey, key, changed }：
    key = 水印版公开 key（首次为 xxx-wm.jpg），changed=true 表示换了文件名，
    调用方需把数据库 file_url 改到新地址并删除旧的无水印公开对象。 */
-async function applyWatermark(publicKey) {
+async function applyWatermark(publicKey, steps) {
+  /* v3.0.1：steps 可选，用于把每一步耗时带回后台，失败时能一眼看出卡在哪 */
+  function mark(name, t0) {
+    if (steps && steps.push) steps.push(name + " " + (Date.now() - t0) + "ms");
+  }
+  var t = Date.now();
   await ensureLogo();
+  mark("logo", t);
   var baseKey = stripWm(publicKey);
   var oKey = originalKeyOf(publicKey);
-  if (!(await cos.objectExists(oKey))) {
+  t = Date.now();
+  var exists = await cos.objectExists(oKey);
+  mark("exists", t);
+  if (!exists) {
+    t = Date.now();
     await cos.copyObject(baseKey, oKey); /* 第一步永远是保原图 */
+    mark("copy", t);
   }
   var destKey = watermarkedKeyOf(publicKey);
+  t = Date.now();
   await cos.imageProcess(oKey, destKey, buildRule()); /* 处理结果写到 destKey */
+  mark("ci", t);
+  t = Date.now();
   await verifyProcessed(destKey, oKey); /* 结果必须真的变了，否则显式失败 */
+  mark("verify", t);
   return { ok: true, originalKey: oKey, key: destKey, changed: destKey !== publicKey };
 }
 

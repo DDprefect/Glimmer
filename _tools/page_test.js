@@ -662,6 +662,19 @@ async function testAdmin() {
   ok("备份结果以 toast 提示（v2.5.0）", /备份完成（2026-10）/.test(toastText) && /作品 3 条/.test(toastText), toastText);
 
   ok("noindex 已设置", (d.querySelector('meta[name="robots"]') || {}).content === "noindex");
+
+  /* v3.0.1：Vercel 平台错误页（非 JSON）不再显示为 Unexpected token */
+  dom.window.fetch = function () {
+    return Promise.resolve({
+      ok: false, status: 500,
+      text: function () { return Promise.resolve("An error occurred in the Serverless Function"); },
+      json: function () { return Promise.reject(new Error("not json")); }
+    });
+  };
+  d.getElementById("pill-save").click();
+  await new Promise(function (r) { setTimeout(r, 80); });
+  var errToast = Array.prototype.map.call(d.querySelectorAll("#toast-wrap .toast"), function (t) { return t.textContent; }).join(" | ");
+  ok("平台错误页 → 显示可读的服务端错误文本", /服务端返回非 JSON/.test(errToast) && /An error occurred/.test(errToast), errToast.slice(-160));
   dom.window.close();
 }
 
